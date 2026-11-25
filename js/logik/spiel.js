@@ -137,3 +137,15 @@ export function rueckblick(quiz, statistikListe, anzahlSpieler, datum) {
     }),
   };
 }
+
+/** Doppelte Spitznamen bekommen in der Reihenfolge des Beitritts eine Nummer («Anna», «Anna 2»). */
+export function eindeutigeNamen(spieler) {
+  const gezaehlt = new Map();
+  return [...spieler].sort((a, b) => (a.beigetreten || 0) - (b.beigetreten || 0)).map(s => {
+    const name = String(s.name || '').trim();
+    const k = name.toLowerCase();
+    const n = (gezaehlt.get(k) || 0) + 1;
+    gezaehlt.set(k, n);
+    return { ...s, name: n > 1 ? `${name} ${n}` : name };
+  });
+}
