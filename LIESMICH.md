@@ -47,7 +47,7 @@ Eine richtige Antwort gibt sofort 1000 Punkte und fällt gleichmässig bis auf 5
 
 ## Firebase einrichten (einmalig)
 
-Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe, Datenbank in Zürich, ohne Analytics und ohne Gemini. Die Regeln aus `firestore.rules` sind veröffentlicht; geprüft ist bisher, was ein nicht angemeldetes Gerät darf. Ein ganzes Spiel mit echten Handys steht noch aus.
+Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe, Datenbank in Zürich, ohne Analytics und ohne Gemini. Die Regeln aus `firestore.rules` sind veröffentlicht; geprüft sind die Zugriffe ohne Anmeldung, Konto anlegen mit Einladungscode und ein ganzes Spiel mit allen sieben Fragetypen (zwei Test-Handys als Browserfenster ohne Anmeldung). Noch offen: echte Handys über das Netz, ein zweites Konto fürs Kollegium, der gemessene Verbrauch.
 
 Ändert sich `firestore.rules`, muss der neue Stand in der Konsole unter **Firestore > Regeln** veröffentlicht werden. Die Schritte unten gelten für ein neues Projekt.
 
