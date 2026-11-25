@@ -47,7 +47,9 @@ Eine richtige Antwort gibt sofort 1000 Punkte und fällt gleichmässig bis auf 5
 
 ## Firebase einrichten (einmalig)
 
-Die Anbindung in `js/store/firebase.js` und die Regeln in `firestore.rules` sind geschrieben, aber noch nie gegen ein echtes Projekt gelaufen. Nach dem Einrichten braucht es einen Durchlauf mit echten Handys.
+Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe, Datenbank in Zürich, ohne Analytics und ohne Gemini. Die Regeln aus `firestore.rules` sind veröffentlicht; geprüft ist bisher, was ein nicht angemeldetes Gerät darf. Ein ganzes Spiel mit echten Handys steht noch aus.
+
+Ändert sich `firestore.rules`, muss der neue Stand in der Konsole unter **Firestore > Regeln** veröffentlicht werden. Die Schritte unten gelten für ein neues Projekt.
 
 1. In der Firebase-Konsole ein Projekt anlegen (Gratis-Stufe «Spark»), darin eine Web-App registrieren.
 2. **Authentication > Anmeldemethode:** «E-Mail/Passwort» einschalten. Unter **Einstellungen > Autorisierte Domains** `pilman1982.github.io` hinzufügen.
