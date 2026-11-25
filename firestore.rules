@@ -1,0 +1,192 @@
+rules_version = '2';
+
+// Rabiosa – Sicherheitsregeln für Cloud Firestore. Gehört zu js/store/firebase.js.
+//
+// Wer ist wer:
+//   - Dozierende sind mit E-Mail und Passwort angemeldet. «Freigeschaltet» ist, wer ein Profil unter
+//     dozierende/{uid} hat; das lässt sich nur mit dem Einladungscode anlegen.
+//   - Studierende sind NICHT angemeldet. Ihr Ausweis ist ein geheimer Zufallsschlüssel (24 Zeichen),
+//     der zugleich die Kennung ihres Spieler-Eintrags ist.
+//
+// Kosten: Jedes get() und exists() in einer Regel zählt als Lesezugriff, auch wenn die Anfrage abgelehnt wird.
+// Darum stehen die billigen Bedingungen vorn, und die Regel für Antworten schlägt gar nichts nach.
+// Grenze: höchstens 10 solche Zugriffe pro Anfrage, 20 pro Stapel (siehe loescheAlle in firebase.js).
+//
+// Einrichten: einstellungen/einladung { code: "…" } von Hand in der Konsole anlegen. Ohne dieses Dokument
+// kann sich niemand freischalten.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function angemeldet() {
+      return request.auth != null;
+    }
+
+    // Ein Lesezugriff. Nur aufrufen, wenn jemand angemeldet ist.
+    function freigeschaltet() {
+      return exists(/databases/$(database)/documents/dozierende/$(request.auth.uid));
+    }
+
+    // Leitung des Spiels – oder freigeschaltete Lehrperson, wenn das Spiel älter als 24 Stunden ist (Aufräumen).
+    // Ein bis zwei Lesezugriffe. Nur aufrufen, wenn jemand angemeldet ist. Gibt es das Spiel nicht: abgelehnt.
+    function darfSpielVerwalten(code) {
+      let spiel = get(/databases/$(database)/documents/spiele/$(code)).data;
+      return spiel.hostUid == request.auth.uid
+        || (request.time - spiel.erstellt > duration.value(24, 'h') && freigeschaltet());
+    }
+
+    // Muss zu saubererAvatar() in js/avatar.js passen. Die Längen sind begrenzt, weil die Avatare
+    // in der Rangliste des Spiels landen und ein Dokument höchstens 1 MiB fasst.
+    function avatarGueltig(a) {
+      return a is map
+        && a.keys().hasOnly(['beruf', 'haut', 'haar', 'frisur', 'brille', 'bart'])
+        && a.get('beruf', '') is string && a.get('beruf', '').size() <= 20
+        && a.get('haar', '') is string && a.get('haar', '').size() <= 20
+        && a.get('frisur', '') is string && a.get('frisur', '').size() <= 20
+        && a.get('haut', 0) is int
+        && a.get('brille', false) is bool
+        && a.get('bart', false) is bool;
+    }
+
+    function spielerGueltig(schluessel) {
+      let d = request.resource.data;
+      return schluessel.size() >= 20 && schluessel.size() <= 64
+        && d.keys().hasOnly(['schluessel', 'pid', 'name', 'avatar', 'beigetreten'])
+        && d.keys().hasAll(['schluessel', 'pid', 'name', 'avatar', 'beigetreten'])
+        && d.schluessel == schluessel
+        && d.pid is string && d.pid.size() <= 16
+        && d.name is string && d.name.size() <= 16
+        && avatarGueltig(d.avatar);
+    }
+
+    // Ohne get()/exists(): Pro Spiel kommen einige hundert Antworten.
+    function antwortGueltig(antwortId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['schluessel', 'frageNr', 'wert', 'zeit'])
+        && d.keys().hasAll(['schluessel', 'frageNr', 'wert', 'zeit'])
+        && d.schluessel is string && d.schluessel.size() >= 20 && d.schluessel.size() <= 64
+        && d.frageNr is int && d.frageNr >= 0 && d.frageNr < 1000
+        && antwortId == string(d.frageNr) + '_' + d.schluessel
+        && d.zeit == request.time
+        && (d.wert is number
+          || d.wert is bool
+          || (d.wert is string && d.wert.size() <= 60)
+          || (d.wert is list && d.wert.size() <= 6));
+    }
+
+    // ----- Einladungscode: Kein Gerät darf ihn lesen oder ändern. Die Regel unten schlägt ihn selbst nach. -----
+    match /einstellungen/{dok} {
+      allow read, write: if false;
+    }
+
+    // ----- Profil: Gibt es das Dokument, ist das Konto freigeschaltet. Nie ändern, nie löschen. -----
+    match /dozierende/{uid} {
+      allow get: if angemeldet() && request.auth.uid == uid;
+      allow create: if angemeldet() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'email', 'code', 'erstellt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80
+        && request.resource.data.email is string && request.resource.data.email.size() <= 200
+        && request.resource.data.code is string && request.resource.data.code.size() <= 100
+        && request.resource.data.erstellt == request.time
+        && request.resource.data.code.lower()
+          == get(/databases/$(database)/documents/einstellungen/einladung).data.code.lower();
+    }
+
+    // ----- Quiz: lesen, wem es gehört oder wenn es freigegeben ist; schreiben nur, wem es gehört. -----
+    match /quizze/{id} {
+      function meins() {
+        return resource.data.besitzer == request.auth.uid;
+      }
+      function quizForm() {
+        let d = request.resource.data;
+        return d.id == id && d.titel is string && d.freigegeben is bool && d.fragen is list;
+      }
+
+      // «resource == null»: Ein Quiz, das es nicht gibt, darf als «nicht gefunden» gemeldet werden.
+      allow get: if angemeldet() && (resource == null || meins() || resource.data.freigegeben == true) && freigeschaltet();
+      // Abfragen müssen selbst auf besitzer == eigene uid oder freigegeben == true filtern.
+      allow list: if angemeldet() && (meins() || resource.data.freigegeben == true) && freigeschaltet();
+      allow create: if angemeldet() && request.resource.data.besitzer == request.auth.uid && quizForm() && freigeschaltet();
+      allow update: if angemeldet() && meins() && request.resource.data.besitzer == resource.data.besitzer && quizForm() && freigeschaltet();
+      allow delete: if angemeldet() && meins() && freigeschaltet();
+
+      // Bilder: wie das Quiz, zu dem sie gehören. { daten: Data-URL }
+      match /bilder/{bildId} {
+        function darfBildLesen() {
+          let quiz = get(/databases/$(database)/documents/quizze/$(id)).data;
+          return (quiz.besitzer == request.auth.uid || quiz.freigegeben == true) && freigeschaltet();
+        }
+        function quizIstMeins() {
+          let quiz = get(/databases/$(database)/documents/quizze/$(id)).data;
+          return quiz.besitzer == request.auth.uid && freigeschaltet();
+        }
+
+        allow read: if angemeldet() && darfBildLesen();
+        allow create, update: if angemeldet()
+          && request.resource.data.keys().hasOnly(['daten'])
+          && request.resource.data.daten is string && request.resource.data.daten.size() <= 900000
+          && quizIstMeins();
+        allow delete: if angemeldet() && quizIstMeins();
+      }
+    }
+
+    // ----- Rückblicke: nur für die Person, der sie gehören. -----
+    match /rueckblicke/{id} {
+      allow read, delete: if angemeldet() && resource.data.besitzer == request.auth.uid && freigeschaltet();
+      allow create: if angemeldet() && request.resource.data.besitzer == request.auth.uid && freigeschaltet();
+      allow update: if angemeldet() && resource.data.besitzer == request.auth.uid
+        && request.resource.data.besitzer == resource.data.besitzer && freigeschaltet();
+    }
+
+    // ----- Spiel: der öffentliche Stand. Die Kennung ist der sechsstellige Code. -----
+    match /spiele/{code} {
+      // Wer den Code kennt, darf den Stand lesen – auch ohne Anmeldung (Handys der Studierenden).
+      allow get: if true;
+      // Auflisten (zum Aufräumen) nur für freigeschaltete Dozierende.
+      allow list: if angemeldet() && freigeschaltet();
+      allow create: if angemeldet()
+        && code.matches('[0-9]{6}')
+        && request.resource.data.code == code
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.erstellt == request.time
+        && freigeschaltet();
+      // Nur die Leitung; «hostUid» und «erstellt» bleiben stehen. Kein Nachschlagen: Das passiert bei jeder Frage.
+      allow update: if angemeldet()
+        && resource.data.hostUid == request.auth.uid
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.erstellt == resource.data.erstellt;
+      allow delete: if angemeldet()
+        && (resource.data.hostUid == request.auth.uid
+          || (request.time - resource.data.erstellt > duration.value(24, 'h') && freigeschaltet()));
+
+      // Nur für die Leitung (Mischungen, Statistik, Gesperrte). Löschen darf auch, wer aufräumt.
+      match /privat/{dok} {
+        allow read, create, update: if angemeldet()
+          && get(/databases/$(database)/documents/spiele/$(code)).data.hostUid == request.auth.uid;
+        allow delete: if angemeldet() && darfSpielVerwalten(code);
+      }
+
+      // Spieler: Die Kennung ist der geheime Schlüssel. Wer sie kennt, darf den Eintrag lesen, anlegen und
+      // ändern – ohne Anmeldung. «beigetreten» ist die Serverzeit des Beitritts und bleibt wie «pid» stehen.
+      match /spieler/{schluessel} {
+        allow get: if true;
+        allow list, delete: if angemeldet() && darfSpielVerwalten(code);
+        allow create: if spielerGueltig(schluessel)
+          && request.resource.data.beigetreten == request.time
+          && exists(/databases/$(database)/documents/spiele/$(code));
+        allow update: if spielerGueltig(schluessel)
+          && request.resource.data.beigetreten == resource.data.beigetreten
+          && request.resource.data.pid == resource.data.pid
+          && exists(/databases/$(database)/documents/spiele/$(code));
+      }
+
+      // Antworten: Die Kennung ist frageNr_schluessel, also höchstens eine pro Person und Frage.
+      // Ändern geht nie – darum scheitert die zweite Antwort (firebase.js meldet «schonGeantwortet»).
+      match /antworten/{antwortId} {
+        allow create: if antwortGueltig(antwortId);
+        allow update: if false;
+        allow read, delete: if angemeldet() && darfSpielVerwalten(code);
+      }
+    }
+  }
+}

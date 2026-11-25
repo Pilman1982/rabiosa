@@ -44,3 +44,19 @@ Die Seite verwendet die EHL-Hausschriften Domaine Display und Hurme Geometric Sa
 ## Punkte
 
 Eine richtige Antwort gibt sofort 1000 Punkte und fällt gleichmässig bis auf 500 am Ende der Zeit. Teilweise richtige Antworten (Mehrfachauswahl, Schätzfrage, Reihenfolge) bekommen den entsprechenden Anteil.
+
+## Firebase einrichten (einmalig)
+
+Die Anbindung in `js/store/firebase.js` und die Regeln in `firestore.rules` sind geschrieben, aber noch nie gegen ein echtes Projekt gelaufen. Nach dem Einrichten braucht es einen Durchlauf mit echten Handys.
+
+1. In der Firebase-Konsole ein Projekt anlegen (Gratis-Stufe «Spark»), darin eine Web-App registrieren.
+2. **Authentication > Anmeldemethode:** «E-Mail/Passwort» einschalten. Unter **Einstellungen > Autorisierte Domains** `pilman1982.github.io` hinzufügen.
+3. **Firestore-Datenbank** anlegen: Standard, Kennung `(default)`, Produktionsmodus, Standort `europe-west6` (Zürich). Der Standort lässt sich später nicht mehr ändern.
+4. **Firestore > Regeln:** den Inhalt von `firestore.rules` einfügen und veröffentlichen.
+5. **Firestore > Daten:** Sammlung `einstellungen`, Dokument `einladung`, Feld `code` (Text) mit dem Einladungscode. Gross- und Kleinschreibung spielen keine Rolle. Kein Gerät kann dieses Dokument lesen.
+6. Die Angaben der Web-App in `js/config.js` eintragen (sie sind nicht geheim).
+
+Einladungscode ändern: Feld `code` in Schritt 5 überschreiben. Bestehende Konten bleiben freigeschaltet.
+Konto sperren: in **Authentication** das Konto deaktivieren und in **Firestore > Daten > dozierende** das Dokument mit seiner Kennung löschen.
+
+Grenzen der Gratis-Stufe: 50 000 Lese- und 20 000 Schreibvorgänge pro Tag (der Tag beginnt um etwa 9 Uhr Schweizer Zeit). Das reicht für ungefähr 15 bis 20 Spiele pro Tag. Ist die Grenze erreicht, bleibt ein laufendes Spiel stehen; für den Betrieb an der ganzen Schule ist die Bezahlstufe «Blaze» die sichere Wahl.
