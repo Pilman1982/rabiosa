@@ -4,6 +4,7 @@ import { t, zahl } from '../i18n.js';
 import { BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE, zufallsAvatar, saubererAvatar } from '../avatar.js';
 import { leseZahl } from '../logik/pruefen.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
+import { istNeuer, istAelter, anderesSpiel, sollNachsehen } from '../logik/waechter.js';
 
 const HAARCODE = { schwarz: '#1E1A19', dunkel: '#4A2E1F', braun: '#7A4A2B', blond: '#C9A35E', rot: '#A6482B', grau: '#B9B7B0' };
 const NAME_MAX = 16;
@@ -308,11 +309,11 @@ export function zeige(wurzel, ctx, code) {
   }
 
   let letzteFrage = -1;
-  const stoppSpiel = store.spiel.beobachten(code, s => {
+  function uebernimm(s) {
     if (s) hatteSpiel = true;
     spiel = s;
     // Ausweis aus einem früheren Spiel mit zufällig gleichem Code: verwerfen.
-    if (s && ich && ich.spielErstellt && s.erstellt && ich.spielErstellt !== s.erstellt) {
+    if (s && ich && ich.spielErstellt && anderesSpiel({ erstellt: ich.spielErstellt }, s)) {
       stoppEigen?.();
       ich = null;
       phase = 'beitritt';
@@ -322,10 +323,54 @@ export function zeige(wurzel, ctx, code) {
     pruefeEntfernt();
     if (s && s.status === 'frage' && s.frage.nr !== letzteFrage) { letzteFrage = s.frage.nr; zeitUm = false; sendet = false; }
     zeichne();
+  }
+  let letzterKontakt = Date.now();
+  const stoppSpiel = store.spiel.beobachten(code, s => {
+    letzterKontakt = Date.now();
+    if (istAelter(s, spiel)) return;   // die Live-Verbindung hinkt dem nachgesehenen Stand noch hinterher
+    uebernimm(s);
   });
+
+  // ---------- Wächter: selbst nachsehen, wenn die Live-Verbindung still steht ----------
+  // Auf Handys passiert das, wenn der Bildschirm gesperrt war, die App gewechselt wurde oder das Netz wechselt.
+  let letztesNachsehen = 0, geweckt = false, siehtNach = false, zu = false;
+  let wartetSeit = Date.now(), warWartend = true;   // die Pause zählt erst ab dem Moment, in dem das Handy wartet
+  // Auf die Lehrperson wartet, wer keine offene Frage vor sich hat. Am Schluss (Podest, Ende) kommt nichts mehr.
+  const wartet = () => spiel === undefined || (phase === 'spiel' && !!spiel && (
+    spiel.status === 'warteraum' || spiel.status === 'aufloesung'
+    || (spiel.status === 'frage' && (!!ich?.gesendet?.[spiel.frage.nr] || zeitUm))));
+  async function sieheNach() {
+    if (siehtNach) return;
+    siehtNach = true;
+    geweckt = false;
+    letztesNachsehen = Date.now();
+    try {
+      const stand = await store.spiel.nachsehen(code);
+      if (!zu && istNeuer(stand, spiel)) {
+        uebernimm(stand);
+        if (!sendet) store.verbindungNeu().catch(() => {});   // die Live-Verbindung hat etwas verpasst
+      }
+    } catch { /* kein Netz: beim nächsten Mal */ }
+    finally { siehtNach = false; letztesNachsehen = Date.now(); }
+  }
+  const waechter = setInterval(() => {
+    const j = Date.now(), w = wartet();
+    if (w && !warWartend) wartetSeit = j;   // eben geantwortet oder Zeit um: Die Auflösung kommt gleich von selbst
+    warWartend = w;
+    if (sollNachsehen({ sichtbar: !document.hidden, wartet: w, geweckt, seitKontakt: j - Math.max(letzterKontakt, wartetSeit), seitNachsehen: j - letztesNachsehen })) sieheNach();
+  }, 1000);
+  const wecke = () => { geweckt = true; };
+  document.addEventListener('visibilitychange', wecke);
+  for (const ereignis of ['pageshow', 'online']) window.addEventListener(ereignis, wecke);
+
   if (ich) beobachteMich();
   const uhr = setInterval(takt, 200);
   zeichne();
 
-  return () => { stoppSpiel(); stoppEigen?.(); clearInterval(uhr); };
+  return () => {
+    zu = true;
+    stoppSpiel(); stoppEigen?.(); clearInterval(uhr); clearInterval(waechter);
+    document.removeEventListener('visibilitychange', wecke);
+    for (const ereignis of ['pageshow', 'online']) window.removeEventListener(ereignis, wecke);
+  };
 }

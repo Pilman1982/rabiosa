@@ -38,6 +38,8 @@ export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, j
   const store = {
     modus: 'demo',
     jetzt,
+    /** Im Demo-Modus gibt es keine Live-Verbindung, die still stehen könnte. */
+    async verbindungNeu() {},
 
     konto: {
       beobachten: cb => beobachte('konto', () => oeffentlichesKonto(konto()), cb),
@@ -138,6 +140,8 @@ export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, j
         melde('spiel:' + code);
       },
       beobachten: (code, cb) => beobachte('spiel:' + code, () => lies('spiel:' + code), cb),
+      /** Der Stand jetzt, einmalig und ohne zu beobachten (siehe js/logik/waechter.js). */
+      async nachsehen(code) { return lies('spiel:' + code); },
       async privatLaden(code) { return lies('privat:' + code, {}); },
       spielerBeobachten: (code, cb) => beobachte('spieler:' + code, () => Object.values(lies('spieler:' + code, {})), cb),
       antwortenBeobachten: (code, frageNr, cb) => beobachte('antworten:' + code,

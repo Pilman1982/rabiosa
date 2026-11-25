@@ -4,6 +4,7 @@
 // Gleiche Schnittstelle wie demo.js. Zeiten gehen als Zahl (ms) an die Aufrufer, in Firestore sind
 // «erstellt», «frageStart», «beigetreten» und «zeit» Zeitstempel des Servers.
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
+import { ausRest, restAdresse } from './rest.js';
 
 /** Version des Firebase JS SDK (modulare API). Nur hier ändern. */
 export const FIREBASE_VERSION = '13.4.0';
@@ -242,9 +243,20 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
     if (bilder.size > BILDER_IM_KOPF) bilder.delete(bilder.keys().next().value);
   }
 
+  let verbindetNeu = false;
   const store = {
     modus: 'firebase',
     jetzt,
+    /**
+     * Baut die Live-Verbindung neu auf. Nötig, wenn sie still steht, ohne dass das SDK es merkt (Bildschirm war
+     * gesperrt, Netz hat gewechselt). Ausstehende Schreibvorgänge bleiben erhalten und gehen danach raus.
+     */
+    async verbindungNeu() {
+      if (verbindetNeu) return;
+      verbindetNeu = true;
+      try { await fs.disableNetwork(db); } catch { /* war schon aus */ }
+      try { await fs.enableNetwork(db); } finally { verbindetNeu = false; }
+    },
 
     konto: {
       beobachten(cb) {
@@ -402,6 +414,21 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         if (oeffentlich && patch.frageStart === SERVERZEIT) schaetzeVersatz(t0, Date.now(), spielRef(code), 'frageStart');
       },
       beobachten: (code, cb) => lausche(spielRef(code), snap => (snap.exists() ? spielAus(snap) : null), cb),
+      /**
+       * Der Stand jetzt, mit einer gewöhnlichen Web-Anfrage statt über die Live-Verbindung des SDK. So klappt es
+       * auch, wenn die Live-Verbindung still steht. Ein Lesezugriff. null = Spiel gibt es nicht.
+       */
+      async nachsehen(code) {
+        const abbruch = new AbortController();
+        const frist = setTimeout(() => abbruch.abort(), 8000);
+        try {
+          const antwort = await fetch(restAdresse(config, 'spiele/' + encodeURIComponent(String(code))), { cache: 'no-store', signal: abbruch.signal });
+          if (antwort.status === 404) return null;
+          if (!antwort.ok) throw fehler('netz');
+          return ausRest(await antwort.json());
+        } catch (e) { throw e && e.code ? e : fehler('netz', e); }
+        finally { clearTimeout(frist); }
+      },
       async privatLaden(code) {
         const snap = await versuche(() => getDoc(privatRef(code)));
         return snap.exists() ? snap.data() : {};

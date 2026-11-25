@@ -61,4 +61,10 @@ Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe,
 Einladungscode ändern: Feld `code` in Schritt 5 überschreiben. Bestehende Konten bleiben freigeschaltet.
 Konto sperren: in **Authentication** das Konto deaktivieren und in **Firestore > Daten > dozierende** das Dokument mit seiner Kennung löschen.
 
-Grenzen der Gratis-Stufe: 50 000 Lese- und 20 000 Schreibvorgänge pro Tag (der Tag beginnt um etwa 9 Uhr Schweizer Zeit). Das reicht für ungefähr 15 bis 20 Spiele pro Tag. Ist die Grenze erreicht, bleibt ein laufendes Spiel stehen; für den Betrieb an der ganzen Schule ist die Bezahlstufe «Blaze» die sichere Wahl.
+## Wenn ein Handy den Anschluss verliert
+
+Die Handys bekommen jeden neuen Stand über eine Live-Verbindung. Auf Handys kann sie still stehen, ohne dass es jemand merkt: nach einer Bildschirmsperre, nach dem Wechsel in eine andere App oder bei einem Netzwechsel. Dafür gibt es den Wächter (`js/logik/waechter.js`, Takt in `js/ansicht/spieler.js`): Das Handy sieht selbst nach, wie weit das Spiel ist (`store.spiel.nachsehen`, eine gewöhnliche Web-Anfrage an Firestore, siehe `js/store/rest.js`), und zwar sofort, wenn der Bildschirm wieder angeht oder das Netz zurückkommt, und sonst alle 10 Sekunden, solange es auf die Lehrperson wartet und nichts Neues gekommen ist. Hat es etwas verpasst, baut es zudem die Live-Verbindung neu auf.
+
+Jedes Nachsehen kostet einen Lesezugriff. Bei 25 Handys und einem Spiel von 20 Minuten sind das grob 2000 bis 3000 zusätzliche Lesezugriffe.
+
+Grenzen der Gratis-Stufe: 50 000 Lese- und 20 000 Schreibvorgänge pro Tag (der Tag beginnt um etwa 9 Uhr Schweizer Zeit). Das reicht für ungefähr 10 bis 15 Spiele pro Tag (geschätzt, einschliesslich Wächter). Ist die Grenze erreicht, bleibt ein laufendes Spiel stehen; für den Betrieb an der ganzen Schule ist die Bezahlstufe «Blaze» die sichere Wahl.
