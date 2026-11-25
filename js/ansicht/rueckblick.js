@@ -9,6 +9,7 @@ import { t } from '../i18n.js';
 export function zeichneVerteilung(info, sprache) {
   const T = (k, w) => t(sprache, k, w);
   const { typ, loesung, verteilung: v } = info;
+  const zahlText = z => String(z).replace('.', sprache === 'en' ? '.' : ',');
   const zeile = (marke, klasse, text, anzahl, hoechst, richtig, blass) => h('div', { class: 'vzeile' + (richtig ? ' richtig' : '') + (blass ? ' blass' : '') },
     h('i', { class: 'marke ' + klasse }, marke),
     h('span', { class: 'vtext' }, text),
@@ -31,9 +32,9 @@ export function zeichneVerteilung(info, sprache) {
   if (typ === 'schaetz') {
     const innerhalb = w => Math.abs(w - loesung.wert) <= loesung.toleranz;
     return h('div', { class: 'verteilung schaetz' },
-      h('p', { class: 'loesung-gross' }, h('span', { class: 'lab' }, T('beamer.richtigIst')), h('b', null, String(loesung.wert).replace('.', sprache === 'en' ? '.' : ','), loesung.einheit ? ' ' + loesung.einheit : ''),
-        loesung.toleranz ? h('span', { class: 'toleranz' }, '± ' + loesung.toleranz) : null),
-      h('div', { class: 'wertchips' }, v.werte.map(w => h('span', { class: 'wertchip' + (innerhalb(w) ? ' treffer' : '') }, String(w)))),
+      h('p', { class: 'loesung-gross' }, h('span', { class: 'lab' }, T('beamer.richtigIst')), h('b', null, zahlText(loesung.wert), loesung.einheit ? ' ' + loesung.einheit : ''),
+        loesung.toleranz ? h('span', { class: 'toleranz' }, '± ' + zahlText(loesung.toleranz)) : null),
+      h('div', { class: 'wertchips' }, v.werte.map(w => h('span', { class: 'wertchip' + (innerhalb(w) ? ' treffer' : '') }, zahlText(w)))),
       h('p', { class: 'vfuss' }, T('beamer.treffer', { n: v.treffer })));
   }
   if (typ === 'reihe') {

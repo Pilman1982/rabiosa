@@ -95,10 +95,11 @@ textarea.feld { font-weight: 400; resize: vertical; min-height: 74px; }
 .h-a span { overflow-wrap: anywhere; }
 .h-a i { font-style: normal; font-family: var(--serif); width: 32px; height: 32px; border-radius: 50%; background: #ffffff26; display: grid; place-items: center; flex: none; }
 .h-a.hoch { min-height: 120px; justify-content: center; font-size: 20px; }
-.h-a.wahl { opacity: .62; }
+.h-a.wahl { opacity: .8; }
+.h-a.wahl i { border-radius: 8px; }
 .h-a.wahl.an { opacity: 1; box-shadow: inset 0 0 0 3px #fff, 0 0 0 3px var(--navy); }
 .h-a.wahl.an i::after { content: " ✓"; }
-.zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.zweier { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .zahlzeile { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
 .feld.zahl { font-family: var(--serif); font-size: 30px; text-align: center; }
 .einheit { font-size: 20px; font-weight: 600; }
@@ -144,8 +145,8 @@ textarea.feld { font-weight: 400; resize: vertical; min-height: 74px; }
 
 .lobby { display: grid; grid-template-columns: 37% 63%; height: 100%; }
 .lobby .links { padding: 4.5cqw 3cqw 0 4.5cqw; }
-.buehne .marke { font-family: var(--serif); font-weight: 600; font-size: 4.7cqw; letter-spacing: .1em; line-height: 1; color: #fff; }
-.buehne .unter { font-size: 1.3cqw; letter-spacing: .22em; text-transform: uppercase; color: #d8a889; margin: 1cqw 0 0; }
+.lobby .marke, .vorlauf .marke { font-family: var(--serif); font-weight: 600; font-size: 4.7cqw; letter-spacing: .1em; line-height: 1; color: #fff; }
+.lobby .unter, .vorlauf .unter, .podest .unter { font-size: 1.3cqw; letter-spacing: .22em; text-transform: uppercase; color: #d8a889; margin: 1cqw 0 0; }
 .qr { width: 15.5cqw; height: 15.5cqw; background: #fff; border-radius: 1cqw; padding: .5cqw; margin-top: 2.6cqw; }
 .qr svg { width: 100%; height: 100%; display: block; }
 .code-l { font-size: 1.25cqw; letter-spacing: .2em; text-transform: uppercase; color: #9fb0cf; margin-top: 1.6cqw; }
@@ -294,6 +295,7 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
 .ed-liste ol { list-style: none; margin: 0 0 14px; padding: 0; }
 .ed-punkt { display: grid; grid-template-columns: 26px 1fr; gap: 8px; width: 100%; text-align: left; border: 1.5px solid transparent; background: #fff; border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; }
 .ed-punkt.an { border-color: var(--navy); }
+.ed-punkt > span:last-child { min-width: 0; }
 .ed-punkt.mangel .nr { background: var(--kupfer); color: #fff; }
 .ed-punkt .nr { font-family: var(--serif); width: 26px; height: 26px; border-radius: 50%; background: var(--hell); display: grid; place-items: center; font-size: 14px; }
 .ed-punkt .art { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--kupfer); display: block; }

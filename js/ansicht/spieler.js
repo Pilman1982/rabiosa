@@ -13,13 +13,13 @@ export function zeige(wurzel, ctx, code) {
   // Im Demo-Modus pro Fenster eine eigene Person, sonst bleibt man auch nach dem Schliessen dieselbe.
   const lager = ctx.demo ? sessionStorage : localStorage;
   const lagerName = 'rabiosa-spieler:' + code;
-  const liesLager = (k, sonst) => { try { return JSON.parse(lager.getItem(k)) ?? sonst; } catch { return sonst; } };
+  const liesLager = (k, sonst, ort = lager) => { try { return JSON.parse(ort.getItem(k)) ?? sonst; } catch { return sonst; } };
 
   let spiel;                                  // undefined = lädt, null = gibt es nicht (mehr)
   let hatteSpiel = false;
   let ich = liesLager(lagerName, null);       // { schluessel, pid, name, avatar, gesendet: { [nr]: true } }
   let phase = ich ? 'spiel' : 'beitritt';     // 'beitritt' | 'spiel' | 'entfernt'
-  let entwurf = ich ? { name: ich.name, avatar: ich.avatar } : liesLager('rabiosa-profil', null) || { name: '', avatar: zufallsAvatar() };
+  let entwurf = ich ? { name: ich.name, avatar: ich.avatar } : liesLager('rabiosa-profil', null, localStorage) || { name: '', avatar: zufallsAvatar() };
   entwurf.avatar = saubererAvatar(entwurf.avatar);
   let letzterEintrag = null;                  // eigener Platz in der Rangliste, bleibt nach Spielende stehen
   let stoppEigen = null;
@@ -155,7 +155,7 @@ export function zeige(wurzel, ctx, code) {
       const nein = h('button', { type: 'button', class: 'h-a a2 hoch' }, h('span', null, T('frage.falsch')));
       ja.addEventListener('click', () => sende(true, hinweis, [ja, nein]));
       nein.addEventListener('click', () => sende(false, hinweis, [ja, nein]));
-      return [h('div', { class: 'zwei' }, ja, nein), hinweis];
+      return [h('div', { class: 'zweier' }, ja, nein), hinweis];
     }
     if (f.typ === 'mehrfach') {
       const gewaehlt = new Set();
