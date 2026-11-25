@@ -172,6 +172,7 @@ const de = {
   'studio.freischalten': 'Freischalten',
   'studio.rueckblicke': 'Rückblicke',
   'studio.ohneFach': 'Ohne Fach',
+  'studio.demoCode': 'Der Einladungscode im Demo-Modus lautet «demo».',
 
   'fehler.email': 'Diese E-Mail-Adresse ist ungültig.',
   'fehler.passwortKurz': 'Das Passwort braucht mindestens 8 Zeichen.',
@@ -410,6 +411,7 @@ const en = {
   'studio.freischalten': 'Activate',
   'studio.rueckblicke': 'Reviews',
   'studio.ohneFach': 'No subject',
+  'studio.demoCode': 'The invitation code in demo mode is “demo”.',
 
   'fehler.email': 'This e-mail address is not valid.',
   'fehler.passwortKurz': 'The password needs at least 8 characters.',

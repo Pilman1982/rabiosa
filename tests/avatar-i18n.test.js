@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { avatarSvg, zufallsAvatar, saubererAvatar, BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE } from '../js/avatar.js';
 import { t, TEXTE, SPRACHEN } from '../js/i18n.js';
+import { readdirSync, readFileSync } from 'node:fs';
 
 test('avatarSvg: jede Kombination aus Beruf und Frisur ergibt ein vollständiges SVG', () => {
   for (const beruf of BERUFE) for (const frisur of FRISUREN) {
@@ -62,4 +63,24 @@ test('t ersetzt Platzhalter, fällt auf Deutsch zurück und zeigt unbekannte Ken
   assert.equal(t('en', 'frage.nummer', { nr: 4, von: 12 }), 'Question 4 of 12');
   assert.equal(t('fr', 'frage.nummer', { nr: 1, von: 2 }), 'Frage 1 von 2');
   assert.equal(t('de', 'gibt.es.nicht'), 'gibt.es.nicht');
+});
+
+test('i18n: jede in den Ansichten verwendete Textkennung gibt es', () => {
+  const ordner = new URL('../js/ansicht/', import.meta.url);
+  const dateien = readdirSync(ordner).map(d => new URL(d, ordner)).concat(new URL('../js/ui.js', import.meta.url));
+  const bereiche = new Set(Object.keys(TEXTE.de).map(k => k.split('.')[0]));
+  let gefunden = 0;
+  for (const datei of dateien) {
+    const text = readFileSync(datei, 'utf8');
+    const name = datei.pathname.split('/').pop();
+    // ganze Kennungen wie 'beamer.code'
+    for (const m of text.matchAll(/'([a-z]+)\.([a-zA-Z]+)'/g)) {
+      if (!bereiche.has(m[1])) continue;
+      gefunden++;
+      assert.ok(`${m[1]}.${m[2]}` in TEXTE.de, `${name}: ${m[1]}.${m[2]}`);
+    }
+    // zusammengesetzte Kennungen wie 'typ.' + f.typ: der Vorsatz muss vorkommen
+    for (const m of text.matchAll(/'([a-z]+)\.' \+/g)) assert.ok(bereiche.has(m[1]), `${name}: ${m[1]}.*`);
+  }
+  assert.ok(gefunden > 100, 'nur ' + gefunden + ' Kennungen gefunden');
 });
