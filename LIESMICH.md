@@ -39,7 +39,7 @@ Alle sichtbaren Texte stehen in `js/i18n.js`, je einmal deutsch und englisch. Ei
 
 ## Schriften
 
-Die Seite verwendet die EHL-Hausschriften Domaine Display und Hurme Geometric Sans, wenn sie auf dem Gerät installiert sind. Die Schriftdateien selbst sind lizenziert und gehören **nicht** in dieses Repo.
+Die Seite verwendet die EHL-Hausschriften Domaine Display und Hurme Geometric Sans, wenn sie auf dem Gerät installiert sind. Diese Schriftdateien sind lizenziert und gehören **nicht** in dieses Repo. Auf allen anderen Geräten (zum Beispiel den Handys der Klasse) springen zwei freie Schriften aus dem Ordner `schriften/` ein: Playfair Display und Jost.
 
 ## Punkte
 

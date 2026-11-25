@@ -1,4 +1,18 @@
 /* Rabiosa – Aussehen. Farben aus der EHL-CI. */
+
+/* Freie Ersatzschriften (OFL) für Geräte ohne die EHL-Hausschriften, siehe schriften/LIESMICH.md.
+   Nur lateinische Zeichen; Sonderzeichen wie ✓ nimmt der Browser aus einer Systemschrift. */
+@font-face {
+  font-family: "Playfair Display"; font-style: normal; font-weight: 400 900; font-display: swap;
+  src: url("../schriften/playfair-display-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+2215;
+}
+@font-face {
+  font-family: "Jost"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../schriften/jost-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+2215;
+}
+
 :root {
   --navy: #001436; --blau: #1B365F; --kupfer: #B6633F; --kupfer-dunkel: #8f4a2c; --petrol: #005779;
   --grau: #919388; --hell: #E3E3E1; --papier: #F6F3EE; --gold: #A8842C; --schiefer: #5A6270; --bordeaux: #7A2E3A;
