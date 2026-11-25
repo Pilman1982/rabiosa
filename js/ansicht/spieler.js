@@ -26,6 +26,8 @@ export function zeige(wurzel, ctx, code) {
   let gezeichnet = '';
   let zeitUm = false;
   let sendet = false;
+  let entferntGemeldet = false;
+  let neueKennung = null;                     // bleibt über mehrere Beitrittsversuche gleich
 
   const sprache = () => (spiel && spiel.sprache) || ctx.sprache;
   const T = (k, w) => t(sprache(), k, w);
@@ -34,9 +36,18 @@ export function zeige(wurzel, ctx, code) {
   function beobachteMich() {
     stoppEigen?.();
     stoppEigen = store.spiel.eigenerSpieler(code, ich.schluessel, s => {
-      if (s || phase !== 'spiel') return;
-      if (spiel && spiel.status !== 'ende') { phase = 'entfernt'; try { lager.removeItem(lagerName); } catch { /* egal */ } zeichne(true); }
+      entferntGemeldet = !s;
+      pruefeEntfernt();
     });
+  }
+
+  /** Der eigene Eintrag ist weg, das Spiel läuft aber noch: Die Lehrperson hat mich entfernt. */
+  function pruefeEntfernt() {
+    if (!entferntGemeldet || !ich || phase === 'entfernt' || !spiel || spiel.status === 'ende') return;
+    phase = 'entfernt';
+    stoppEigen?.();
+    try { lager.removeItem(lagerName); } catch { /* egal */ }
+    zeichne(true);
   }
 
   const restMs = () => {
@@ -85,10 +96,12 @@ export function zeige(wurzel, ctx, code) {
       const name = feld.value.trim().replace(/\s+/g, ' ').slice(0, NAME_MAX);
       if (!name) { hinweis.textContent = T('beitritt.nameFehlt'); feld.focus(); return; }
       knopf.disabled = true;
-      const neu = { schluessel: ich?.schluessel || zufallsKennung(24), pid: ich?.pid || zufallsKennung(10), name, avatar: saubererAvatar(entwurf.avatar) };
+      neueKennung ??= { schluessel: zufallsKennung(24), pid: zufallsKennung(10) };
+      const neu = { schluessel: ich?.schluessel || neueKennung.schluessel, pid: ich?.pid || neueKennung.pid, name, avatar: saubererAvatar(entwurf.avatar) };
       try {
         await store.spiel.beitreten(code, neu);
-        ich = { ...neu, gesendet: ich?.gesendet || {} };
+        ich = { ...neu, gesendet: ich?.gesendet || {}, spielErstellt: spiel?.erstellt ?? null };
+        entferntGemeldet = false;
         try {
           for (let i = lager.length - 1; i >= 0; i--) { const k = lager.key(i); if (k && k.startsWith('rabiosa-spieler:') && k !== lagerName) lager.removeItem(k); }
           localStorage.setItem('rabiosa-profil', JSON.stringify({ name, avatar: neu.avatar }));
@@ -174,12 +187,15 @@ export function zeige(wurzel, ctx, code) {
     }
     if (f.typ === 'schaetz') {
       const feld = h('input', { class: 'feld zahl', inputmode: 'decimal', autocomplete: 'off', maxlength: '14', placeholder: T('frage.zahl'), 'aria-label': T('frage.zahl') });
+      // Viele Handy-Tastaturen für Zahlen haben kein Minus: eigener Knopf für negative Werte (z. B. −18 °C).
+      const vorzeichen = h('button', { type: 'button', class: 'pfeil', title: T('frage.vorzeichen'), 'aria-label': T('frage.vorzeichen'),
+        onclick: () => { const v = feld.value.trim(); feld.value = /^[-−–]/.test(v) ? v.replace(/^[-−–]\s*/, '') : '-' + v; feld.focus(); } }, '±');
       const knopf = sendeKnopf(() => {
         const z = leseZahl(feld.value);
         if (Number.isNaN(z)) { hinweis.textContent = T('frage.zahlUngueltig'); feld.focus(); return undefined; }
         return z;
       });
-      return [h('div', { class: 'zahlzeile' }, feld, f.einheit ? h('span', { class: 'einheit' }, f.einheit) : null), hinweis, knopf];
+      return [h('div', { class: 'zahlzeile' }, vorzeichen, feld, f.einheit ? h('span', { class: 'einheit' }, f.einheit) : null), hinweis, knopf];
     }
     if (f.typ === 'reihe') {
       let folge = f.elemente.map((_, i) => i);
@@ -295,6 +311,15 @@ export function zeige(wurzel, ctx, code) {
   const stoppSpiel = store.spiel.beobachten(code, s => {
     if (s) hatteSpiel = true;
     spiel = s;
+    // Ausweis aus einem früheren Spiel mit zufällig gleichem Code: verwerfen.
+    if (s && ich && ich.spielErstellt && s.erstellt && ich.spielErstellt !== s.erstellt) {
+      stoppEigen?.();
+      ich = null;
+      phase = 'beitritt';
+      entferntGemeldet = false;
+      try { lager.removeItem(lagerName); } catch { /* egal */ }
+    }
+    pruefeEntfernt();
     if (s && s.status === 'frage' && s.frage.nr !== letzteFrage) { letzteFrage = s.frage.nr; zeitUm = false; sendet = false; }
     zeichne();
   });

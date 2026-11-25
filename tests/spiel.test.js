@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mische, neuesSpiel, frageStarten, auswerten, rueckblick } from '../js/logik/spiel.js';
+import { mische, neuesSpiel, frageStarten, auswerten, rueckblick, saubereSpieler, statistikSetzen } from '../js/logik/spiel.js';
 import { beispielQuiz } from '../js/logik/quiz.js';
 
 const spieler = [
@@ -170,7 +170,7 @@ test('rueckblick fasst Fragen, Lösungen und Verteilungen ohne Namen zusammen', 
   assert.equal(rb.quizTitel, 'Hygiene');
   assert.equal(rb.datum, 1234);
   assert.equal(rb.spieler, 3);
-  assert.deepEqual(rb.fragen[0], { text: 'Frage?', typ: 'mc', antworten: ['a', 'b', 'c'], loesung: 1, verteilung: [0, 1, 0],
+  assert.deepEqual(rb.fragen[0], { nr: 0, text: 'Frage?', typ: 'mc', antworten: ['a', 'b', 'c'], loesung: 1, verteilung: [0, 1, 0],
     beantwortet: 1, spieler: 3, richtig: 1, schnitt: 1 / 3 });
   assert.ok(!JSON.stringify(rb).includes('Anna'));
 });
@@ -183,4 +183,61 @@ test('Zustand lässt sich aus öffentlich + privat wiederherstellen: zweite Frag
     antworten: [{ schluessel: 'K-anna', wert: 1, zeit: nach(20) }] });
   assert.equal(eintrag(zweite, 'p1').punkte, 1500);
   assert.equal(eintrag(zweite, 'p1').plus, 500);
+});
+
+test('saubereSpieler: unbrauchbare Einträge fallen weg, Namen und Avatare werden bereinigt', () => {
+  const liste = saubereSpieler([
+    { schluessel: 'k1', pid: 'p1', name: '  Anna   Maria  ', avatar: { beruf: '<script>' }, beigetreten: 10 },
+    { schluessel: 'k2', pid: 'p2', name: 'x'.repeat(500), avatar: null, beigetreten: 20 },
+    { schluessel: 'k3', pid: 'p3', name: 42, beigetreten: 30 },
+    { schluessel: 'k4', name: 'ohne pid', beigetreten: 40 },
+    { pid: 'p5', name: 'ohne schluessel', beigetreten: 50 },
+    null,
+  ]);
+  assert.deepEqual(liste.map(s => [s.schluessel, s.pid, s.name]), [['k1', 'p1', 'Anna Maria'], ['k2', 'p2', 'x'.repeat(16)], ['k3', 'p3', '?']]);
+  assert.equal(liste[0].avatar.beruf, 'kueche');
+  assert.deepEqual(Object.keys(liste[1].avatar).sort(), ['bart', 'beruf', 'brille', 'frisur', 'haar', 'haut']);
+});
+
+test('saubereSpieler: eine doppelte öffentliche Kennung erbt keine fremden Punkte – wer zuerst da war, behält sie', () => {
+  const liste = saubereSpieler([
+    { schluessel: 'k-dieb', pid: 'p1', name: 'Dieb', avatar: {}, beigetreten: 99 },
+    { schluessel: 'k-anna', pid: 'p1', name: 'Anna', avatar: {}, beigetreten: 10 },
+  ]);
+  assert.deepEqual(liste.map(s => s.schluessel), ['k-anna']);
+});
+
+test('saubereSpieler: gesperrte fallen weg, doppelte Namen bekommen eine Nummer', () => {
+  const liste = saubereSpieler([
+    { schluessel: 'k1', pid: 'p1', name: 'Luca', avatar: {}, beigetreten: 10 },
+    { schluessel: 'k2', pid: 'p2', name: 'luca', avatar: {}, beigetreten: 20 },
+    { schluessel: 'k3', pid: 'p3', name: 'Weg', avatar: {}, beigetreten: 30 },
+  ], ['k3']);
+  assert.deepEqual(liste.map(s => s.name), ['Luca', 'luca 2']);
+});
+
+test('neuesSpiel friert das Quiz im privaten Teil ein', () => {
+  const quiz = { ...beispielQuiz('de'), id: 'q1' };
+  const { oeffentlich, privat } = neuesSpiel(quiz, 'host1');
+  assert.deepEqual(privat.quiz, quiz);
+  quiz.fragen.pop();
+  assert.equal(privat.quiz.fragen.length, quiz.fragen.length + 1);
+  assert.ok(!('quiz' in oeffentlich));
+});
+
+test('statistikSetzen legt den Eintrag an seine Fragenummer, auch wenn er schon da ist', () => {
+  const a = statistikSetzen([], 1, { beantwortet: 2 });
+  assert.deepEqual(a, [null, { nr: 1, beantwortet: 2 }]);
+  const b = statistikSetzen(a, 0, { beantwortet: 3 });
+  assert.deepEqual(b, [{ nr: 0, beantwortet: 3 }, { nr: 1, beantwortet: 2 }]);
+  assert.deepEqual(statistikSetzen(b, 1, { beantwortet: 9 }), [{ nr: 0, beantwortet: 3 }, { nr: 1, beantwortet: 9 }]);
+  assert.deepEqual(a, [null, { nr: 1, beantwortet: 2 }]);
+});
+
+test('rueckblick überspringt Lücken und ordnet jede Statistik ihrer Frage zu', () => {
+  const quiz = { id: 'q1', titel: 'T', fragen: [mc, { ...mc, text: 'Zweite?' }] };
+  const r = auswerten({ frage: mc, mischung: null, spieler, frageStart: START, rangVorher: [], antworten: [] });
+  const liste = statistikSetzen([], 1, { ...r.statistik, aufloesung: r.aufloesung });
+  const rb = rueckblick(quiz, [...liste, { nr: 7, ...r.statistik, aufloesung: r.aufloesung }], 3, 1);
+  assert.deepEqual(rb.fragen.map(f => [f.nr, f.text]), [[1, 'Zweite?']]);
 });

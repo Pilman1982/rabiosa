@@ -59,7 +59,7 @@ export function zeichneRueckblick(rb, sprache) {
   const knopf = h('button', { class: 'knopf leise klein' });
   const baue = () => {
     knopf.textContent = T(schwierigste ? 'rueckblick.reihenfolge' : 'rueckblick.schwierigste');
-    const fragen = rb.fragen.map((f, nr) => ({ f, nr }));
+    const fragen = rb.fragen.map((f, platz) => ({ f, nr: f.nr ?? platz }));
     if (schwierigste) fragen.sort((a, b) => (a.f.typ === 'umfrage') - (b.f.typ === 'umfrage') || a.f.schnitt - b.f.schnitt);
     liste.replaceChildren(...fragen.map(({ f, nr }) => h('section', { class: 'rb-frage' },
       h('header', null,

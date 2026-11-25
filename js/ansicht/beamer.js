@@ -3,7 +3,7 @@ import { h, svg, avatar, fluss, logo, rueckfrage, meldung, fehlerText, BUCHSTABE
 import { t, zahl } from '../i18n.js';
 import { qrSvg } from '../qr.js';
 import ton from '../ton.js';
-import { frageStarten, auswerten, rueckblick, eindeutigeNamen, KULANZ_MS } from '../logik/spiel.js';
+import { frageStarten, auswerten, rueckblick, saubereSpieler, statistikSetzen, KULANZ_MS } from '../logik/spiel.js';
 import { SERVERZEIT } from '../store/gemeinsam.js';
 import { zeichneVerteilung, zeichneRueckblick } from './rueckblick.js';
 
@@ -18,7 +18,7 @@ export function zeige(wurzel, ctx, code) {
   let vorlauf = null;                // { nr, rest } während des Countdowns vor einer Frage
   let fertigerRueckblick = null;
   let stoppSpiel = null, stoppSpieler = null, stoppAntworten = null, antwortenNr = -1;
-  let wertetAus = false, fruehGeplant = false, abgebaut = false, startet = false, antwortenDa = false;
+  let wertetAus = false, fruehGeplant = false, abgebaut = false, startet = false, antwortenDa = false, naechsterVersuch = 0;
   let primaer = null;                // Aktion der Leertaste
   let qrKnoten = null;
   const bilder = new Map();
@@ -27,7 +27,7 @@ export function zeige(wurzel, ctx, code) {
   const sprache = () => (spiel && spiel.sprache) || (quiz && quiz.sprache) || ctx.sprache;
   const T = (k, w) => t(sprache(), k, w);
   const spaeter = (f, ms) => { const id = setTimeout(() => { zeiten.delete(id); if (!abgebaut) f(); }, ms); zeiten.add(id); };
-  const aktive = () => eindeutigeNamen(spieler.filter(s => !(privat?.gesperrt || []).includes(s.schluessel)));
+  const aktive = () => saubereSpieler(spieler, privat?.gesperrt || []);
   const frageStart = () => spiel.frageStart ?? store.jetzt();
   const melde = e => meldung(fehlerText(sprache(), e));
 
@@ -65,17 +65,56 @@ export function zeige(wurzel, ctx, code) {
     if (!ok) zeichne();
   }
 
+  /** Abonniert die Antworten neu und wartet auf die erste Meldung des Servers: keine Auswertung auf veraltetem Stand. */
+  function frischeAntworten(nr) {
+    return new Promise(fertig => {
+      stoppAntworten?.();
+      antwortenDa = false;
+      antwortenNr = nr;
+      let erste = true;
+      stoppAntworten = store.spiel.antwortenBeobachten(code, nr, liste => {
+        antworten = liste;
+        antwortenDa = true;
+        if (erste) { erste = false; fertig(liste); } else takt();
+      });
+    });
+  }
+  function frischeSpieler() {
+    return new Promise(fertig => {
+      stoppSpieler?.();
+      let erste = true;
+      stoppSpieler = store.spiel.spielerBeobachten(code, liste => {
+        spieler = liste;
+        if (erste) { erste = false; fertig(liste); return; }
+        if (zustand !== 'bereit') return;
+        if (spiel && spiel.status === 'warteraum' && !vorlauf) zeichne(); else takt();
+      });
+    });
+  }
+
   async function aufloesen() {
-    if (wertetAus || !spiel || spiel.status !== 'frage') return;
+    if (wertetAus || !spiel || spiel.status !== 'frage' || Date.now() < naechsterVersuch) return;
     wertetAus = true;
     const nr = spiel.frageNr;
-    const ergebnis = auswerten({ frage: quiz.fragen[nr], mischung: (privat.mischungen || {})[nr] || null, spieler: aktive(),
-      antworten, frageStart: frageStart(), rangVorher: spiel.rangliste });
-    privat = { ...privat, statistik: [...(privat.statistik || []).slice(0, nr), { ...ergebnis.statistik, aufloesung: ergebnis.aufloesung }] };
-    teil = 'aufloesung';
-    const ok = await schreibe({ status: 'aufloesung', aufloesung: ergebnis.aufloesung, rangliste: ergebnis.rangliste }, { statistik: privat.statistik });
-    if (ok) ton.spiele('gong');
-    wertetAus = false;
+    try {
+      // Frischer Stand vom Server: Antworten, Spieler und der private Teil (falls ein zweites Beamer-Fenster offen ist).
+      const [frisch, , privatNeu] = await Promise.all([frischeAntworten(nr), frischeSpieler(), store.spiel.privatLaden(code)]);
+      if (abgebaut || !spiel || spiel.status !== 'frage' || spiel.frageNr !== nr) return;
+      privat = { ...privat, ...privatNeu };
+      const ergebnis = auswerten({ frage: quiz.fragen[nr], mischung: (privat.mischungen || {})[nr] || null, spieler: aktive(),
+        antworten: frisch, frageStart: frageStart(), rangVorher: spiel.rangliste });
+      const statistik = statistikSetzen(privat.statistik, nr, { ...ergebnis.statistik, aufloesung: ergebnis.aufloesung });
+      teil = 'aufloesung';
+      await store.spiel.aktualisieren(code, { status: 'aufloesung', aufloesung: ergebnis.aufloesung, rangliste: ergebnis.rangliste }, { statistik });
+      privat = { ...privat, statistik };
+      ton.spiele('gong');
+    } catch (e) {
+      console.error(e);
+      naechsterVersuch = Date.now() + 5000;   // nicht im Zehntelsekundentakt wiederholen
+      melde(e);
+    } finally {
+      wertetAus = false;
+    }
   }
 
   async function abschliessen(mitRueckblick) {
@@ -84,6 +123,7 @@ export function zeige(wurzel, ctx, code) {
     const rb = statistik.length ? rueckblick(quiz, statistik, aktive().length, store.jetzt()) : null;
     zustand = 'fertig';
     ton.stopp();
+    try { localStorage.removeItem('rabiosa-laufend'); } catch { /* ohne Speicher */ }
     try {
       if (rb) await store.rueckblick.speichern(rb);
       await store.spiel.aktualisieren(code, { status: 'ende' });
@@ -104,8 +144,13 @@ export function zeige(wurzel, ctx, code) {
 
   // ---------- Bausteine ----------
   function werkzeug() {
-    const knopf = (zeichen, titel, klick) => h('button', { class: 'wz', title: titel, 'aria-label': titel, onclick: klick }, zeichen);
+    // Nach dem Klick den Fokus abgeben: Sonst löst die Leertaste diesen Knopf aus statt «Weiter».
+    const knopf = (zeichen, titel, klick) => h('button', { class: 'wz', title: titel, 'aria-label': titel, onclick: e => { e.currentTarget.blur(); klick(); } }, zeichen);
+    const regler = h('input', { class: 'lautregler', type: 'range', min: '5', max: '100', step: '5', value: String(Math.round(ton.laut * 100)), title: T('beamer.lautstaerke'), 'aria-label': T('beamer.lautstaerke') });
+    regler.addEventListener('input', () => { ton.laut = Number(regler.value) / 100; });
+    regler.addEventListener('change', () => regler.blur());
     return h('div', { class: 'werkzeug' },
+      ton.stumm ? null : regler,
       knopf(ton.stumm ? '🔇' : '🔊', T(ton.stumm ? 'beamer.tonAn' : 'beamer.tonAus'), () => { ton.stumm = !ton.stumm; zeichne(); }),
       knopf('⛶', T('beamer.vollbild'), () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); }),
       zustand === 'bereit' ? knopf('✕', T('beamer.beenden'), async () => { if (await rueckfrage(sprache(), T('beamer.beendenFrage'), T('beamer.beenden'))) abschliessen(false); }) : null);
@@ -126,7 +171,10 @@ export function zeige(wurzel, ctx, code) {
 
   function warteraum() {
     const liste = aktive();
-    qrKnoten ??= svg(qrSvg(ctx.beitrittsAdresse(code), { rand: 2 }));
+    if (!qrKnoten) {
+      try { qrKnoten = svg(qrSvg(ctx.beitrittsAdresse(code), { rand: 2 })); }
+      catch (e) { console.error(e); qrKnoten = h('span'); }   // Adresse zu lang für den Code: Der Spielcode genügt
+    }
     const spalten = liste.length <= 18 ? 6 : liste.length <= 32 ? 8 : 10;
     return buehne('b-navy',
       h('div', { class: 'lobby' },
@@ -275,15 +323,14 @@ export function zeige(wurzel, ctx, code) {
     const da = new Set(antworten.filter(a => schluessel.has(a.schluessel)).map(a => a.schluessel)).size;
     if (zaehler) zaehler.textContent = T('beamer.antworten', { n: da, von: alle.length });
     if (rest > 0) ton.spiele(rest <= 5000 ? 'endspurt' : 'frage');
-    if (!antwortenDa) return;   // nach einem Neuladen erst auswerten, wenn die Antworten wieder da sind
     if (rest <= -(KULANZ_MS + 500)) aufloesen();
-    else if (alle.length && da >= alle.length && !fruehGeplant) { fruehGeplant = true; spaeter(aufloesen, 700); }
+    else if (antwortenDa && alle.length && da >= alle.length && !fruehGeplant) { fruehGeplant = true; spaeter(aufloesen, 700); }
   }
 
   function abgleich() {
     if (!spiel || zustand !== 'bereit') return;
     if (spiel.status === 'frage') {
-      if (antwortenNr !== spiel.frageNr) {
+      if (antwortenNr !== spiel.frageNr && !wertetAus) {
         stoppAntworten?.();
         antwortenNr = spiel.frageNr;
         antworten = [];
@@ -302,17 +349,12 @@ export function zeige(wurzel, ctx, code) {
   async function ladeAllesZum(s) {
     try {
       privat = await store.spiel.privatLaden(code);
-      quiz = await store.quiz.laden(privat.quizId);
+      // Das Quiz ist im Spiel eingefroren; ältere Spiele ohne Kopie laden es nach.
+      quiz = privat.quiz || await store.quiz.laden(privat.quizId);
       // Erst bereit, wenn die Spielerliste da ist: Eine Auswertung ohne Liste würde alle Punkte löschen.
-      await new Promise(da => {
-        stoppSpieler = store.spiel.spielerBeobachten(code, liste => {
-          spieler = liste;
-          da();
-          if (zustand !== 'bereit') return;
-          if (spiel && spiel.status === 'warteraum' && !vorlauf) zeichne(); else takt();
-        });
-      });
+      await frischeSpieler();
       zustand = 'bereit';
+      try { localStorage.setItem('rabiosa-laufend', code); } catch { /* ohne Speicher */ }
     } catch (e) { console.error(e); zustand = 'weg'; }
     abgleich();
     zeichne();
@@ -339,6 +381,7 @@ export function zeige(wurzel, ctx, code) {
 
   const taste = e => {
     ton.wecke();
+    if (e.repeat) return;   // gehaltene Taste soll nichts überspringen
     if (e.target.closest?.('input, textarea, select, dialog, button, a')) return;   // Knöpfe lösen selbst aus
     if ((e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowRight') && primaer && !document.querySelector('dialog[open]')) {
       e.preventDefault();

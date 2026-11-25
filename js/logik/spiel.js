@@ -2,6 +2,7 @@
 import { punkte } from './punkte.js';
 import { anteil, normalisiere } from './pruefen.js';
 import { oeffentlicheFrage } from './quiz.js';
+import { saubererAvatar } from '../avatar.js';
 
 /** Zusätzliche Frist für den Weg der Antwort zum Server. */
 export const KULANZ_MS = 1000;
@@ -23,7 +24,8 @@ export function neuesSpiel(quiz, hostUid) {
       hostUid, quizTitel: quiz.titel, sprache: quiz.sprache || 'de', status: 'warteraum',
       frageNr: -1, frageAnzahl: quiz.fragen.length, frage: null, frageStart: null, aufloesung: null, rangliste: [],
     },
-    privat: { quizId: quiz.id, mischungen: {}, statistik: [], gesperrt: [] },
+    // Das Quiz wird eingefroren: Ändert es jemand während des Spiels, bleibt dieses Spiel davon unberührt.
+    privat: { quizId: quiz.id, quiz: JSON.parse(JSON.stringify(quiz)), mischungen: {}, statistik: [], gesperrt: [] },
   };
 }
 
@@ -128,12 +130,15 @@ export function auswerten({ frage, mischung, spieler, antworten, frageStart, ran
 export function rueckblick(quiz, statistikListe, anzahlSpieler, datum) {
   return {
     quizId: quiz.id, quizTitel: quiz.titel, datum, spieler: anzahlSpieler,
-    fragen: statistikListe.map((s, nr) => {
+    fragen: statistikListe.flatMap((s, platz) => {
+      if (!s) return [];
+      const nr = s.nr ?? platz;
       const f = quiz.fragen[nr];
-      const eintrag = { text: f.text, typ: f.typ };
+      if (!f) return [];
+      const eintrag = { nr, text: f.text, typ: f.typ };
       if (f.antworten) eintrag.antworten = f.antworten.map(a => a.text);
-      return { ...eintrag, loesung: s.aufloesung.loesung, verteilung: s.aufloesung.verteilung,
-        beantwortet: s.beantwortet, spieler: s.spieler, richtig: s.richtig, schnitt: s.schnitt };
+      return [{ ...eintrag, loesung: s.aufloesung.loesung, verteilung: s.aufloesung.verteilung,
+        beantwortet: s.beantwortet, spieler: s.spieler, richtig: s.richtig, schnitt: s.schnitt }];
     }),
   };
 }
@@ -148,4 +153,29 @@ export function eindeutigeNamen(spieler) {
     gezaehlt.set(k, n);
     return { ...s, name: n > 1 ? `${name} ${n}` : name };
   });
+}
+
+/** Setzt die Statistik einer Frage an ihren Platz (auch wenn schon ein anderes Fenster sie geschrieben hat). */
+export function statistikSetzen(liste, nr, eintrag) {
+  const neu = Array.from({ length: Math.max((liste || []).length, nr + 1) }, (_, i) => (liste || [])[i] ?? null);
+  neu[nr] = { nr, ...eintrag };
+  return neu;
+}
+
+/**
+ * Spieler-Einträge kommen von fremden Handys: nur brauchbare behalten, Namen und Avatare bereinigen.
+ * Bei doppelter öffentlicher Kennung zählt, wer zuerst da war (sonst könnte man fremde Punkte übernehmen).
+ */
+export function saubereSpieler(spieler, gesperrt = []) {
+  const gesehen = new Set();
+  const liste = (spieler || [])
+    .filter(s => s && typeof s.schluessel === 'string' && s.schluessel && typeof s.pid === 'string' && s.pid && !gesperrt.includes(s.schluessel))
+    .sort((a, b) => (Number(a.beigetreten) || 0) - (Number(b.beigetreten) || 0))
+    .filter(s => !gesehen.has(s.pid) && gesehen.add(s.pid))
+    .map(s => ({
+      schluessel: s.schluessel, pid: s.pid.slice(0, 16),
+      name: (typeof s.name === 'string' ? s.name.replace(/\s+/g, ' ').trim().slice(0, 16) : '') || '?',
+      avatar: saubererAvatar(s.avatar), beigetreten: Number(s.beigetreten) || 0,
+    }));
+  return eindeutigeNamen(liste);
 }

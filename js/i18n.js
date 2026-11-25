@@ -75,6 +75,7 @@ const de = {
   'frage.hoch': 'nach oben',
   'frage.runter': 'nach unten',
   'frage.fehler': 'Die Antwort kam nicht an. Tippe nochmals.',
+  'frage.vorzeichen': 'Vorzeichen wechseln',
 
   'ergebnis.richtig': 'Richtig',
   'ergebnis.teilweise': 'Teilweise richtig',
@@ -115,6 +116,7 @@ const de = {
   'beamer.tonAn': 'Ton an',
   'beamer.tonAus': 'Ton aus',
   'beamer.vollbild': 'Vollbild',
+  'beamer.lautstaerke': 'Lautstärke',
   'beamer.leertaste': 'Leertaste = weiter',
   'beamer.richtigIst': 'Richtig ist',
   'beamer.treffer': '{n} innerhalb der Toleranz',
@@ -133,7 +135,7 @@ const de = {
   'rueckblick.studio': 'Zurück zum Studio',
   'rueckblick.leer': 'Dieses Quiz wurde noch nie gespielt.',
   'rueckblick.vom': 'Durchführung vom {datum}',
-  'rueckblick.personen': '{n} Personen',
+  'rueckblick.personen': 'Teilnehmende: {n}',
 
   'studio.titel': 'Studio',
   'studio.anmelden': 'Anmelden',
@@ -172,6 +174,7 @@ const de = {
   'studio.freischalten': 'Freischalten',
   'studio.rueckblicke': 'Rückblicke',
   'studio.ohneFach': 'Ohne Fach',
+  'studio.fortsetzen': 'Laufendes Spiel {code} fortsetzen',
   'studio.demoCode': 'Der Einladungscode im Demo-Modus lautet «demo».',
 
   'fehler.email': 'Diese E-Mail-Adresse ist ungültig.',
@@ -314,6 +317,7 @@ const en = {
   'frage.hoch': 'move up',
   'frage.runter': 'move down',
   'frage.fehler': 'Your answer did not arrive. Tap again.',
+  'frage.vorzeichen': 'Switch sign',
 
   'ergebnis.richtig': 'Correct',
   'ergebnis.teilweise': 'Partly correct',
@@ -354,6 +358,7 @@ const en = {
   'beamer.tonAn': 'Sound on',
   'beamer.tonAus': 'Sound off',
   'beamer.vollbild': 'Full screen',
+  'beamer.lautstaerke': 'Volume',
   'beamer.leertaste': 'Space bar = next',
   'beamer.richtigIst': 'Correct answer',
   'beamer.treffer': '{n} within tolerance',
@@ -372,7 +377,7 @@ const en = {
   'rueckblick.studio': 'Back to the studio',
   'rueckblick.leer': 'This quiz has not been played yet.',
   'rueckblick.vom': 'Session of {datum}',
-  'rueckblick.personen': '{n} people',
+  'rueckblick.personen': 'Participants: {n}',
 
   'studio.titel': 'Studio',
   'studio.anmelden': 'Sign in',
@@ -411,6 +416,7 @@ const en = {
   'studio.freischalten': 'Activate',
   'studio.rueckblicke': 'Reviews',
   'studio.ohneFach': 'No subject',
+  'studio.fortsetzen': 'Resume running game {code}',
   'studio.demoCode': 'The invitation code in demo mode is “demo”.',
 
   'fehler.email': 'This e-mail address is not valid.',

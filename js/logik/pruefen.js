@@ -2,14 +2,16 @@
 
 export function normalisiere(text) {
   if (typeof text !== 'string') return '';
-  return text.toLowerCase()
+  return text.normalize('NFC').toLowerCase()
+    .replace(/[’‘`´ʼ]/g, "'")
     .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+    .normalize('NFD').replace(/\p{M}/gu, '')
     .replace(/\s+/g, ' ').trim();
 }
 
 export function leseZahl(text) {
-  const s = String(text ?? '').replace(/['’\s]/g, '').replace(',', '.');
+  const s = String(text ?? '').replace(/[−–]/g, '-').replace(/['’\s]/g, '').replace(',', '.');
   return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : NaN;
 }
 

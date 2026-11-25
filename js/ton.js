@@ -26,8 +26,13 @@ const SCHLEIFEN = {
 SCHLEIFEN.endspurt = { ...SCHLEIFEN.frage, tempo: 152 };
 
 let kontext = null, haupt = null, uhr = null, laeuft = null;
-let stumm = false;
-try { stumm = localStorage.getItem('rabiosa-stumm') === '1'; } catch { /* ohne Speicher */ }
+let stumm = false, laut = 1;
+try {
+  stumm = localStorage.getItem('rabiosa-stumm') === '1';
+  const l = Number(localStorage.getItem('rabiosa-laut'));
+  if (l > 0 && l <= 1) laut = l;
+} catch { /* ohne Speicher */ }
+const pegel = () => (stumm ? 0 : 0.9 * laut);
 
 function bereit() {
   if (!kontext) {
@@ -35,7 +40,7 @@ function bereit() {
     if (!K) return false;
     kontext = new K();
     haupt = kontext.createGain();
-    haupt.gain.value = stumm ? 0 : 0.9;
+    haupt.gain.value = pegel();
     haupt.connect(kontext.destination);
   }
   if (kontext.state === 'suspended') kontext.resume().catch(() => {});
@@ -110,6 +115,13 @@ export default {
   set stumm(wert) {
     stumm = !!wert;
     try { localStorage.setItem('rabiosa-stumm', stumm ? '1' : '0'); } catch { /* ohne Speicher */ }
-    if (haupt) haupt.gain.setTargetAtTime(stumm ? 0 : 0.9, kontext.currentTime, 0.03);
+    if (haupt) haupt.gain.setTargetAtTime(pegel(), kontext.currentTime, 0.03);
+  },
+  /** Lautstärke 0.05 bis 1. */
+  get laut() { return laut; },
+  set laut(wert) {
+    laut = Math.min(1, Math.max(0.05, Number(wert) || 1));
+    try { localStorage.setItem('rabiosa-laut', String(laut)); } catch { /* ohne Speicher */ }
+    if (haupt) haupt.gain.setTargetAtTime(pegel(), kontext.currentTime, 0.03);
   },
 };

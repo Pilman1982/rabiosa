@@ -130,6 +130,8 @@ textarea.feld { font-weight: 400; resize: vertical; min-height: 74px; }
 .werkzeug:hover, .werkzeug:focus-within { opacity: 1; }
 .wz { border: 0; background: transparent; color: inherit; font-size: 1.5cqw; width: 2.8cqw; height: 2.8cqw; border-radius: 50%; }
 .wz:hover { background: #7f7f7f33; }
+.lautregler { width: 7cqw; accent-color: var(--kupfer); align-self: center; }
+.laufend { margin: 0 0 18px; }
 .hauptknopf { position: absolute; right: 4cqw; bottom: 2.4cqw; display: flex; align-items: center; gap: 1.4cqw; z-index: 4; }
 .tastenhinweis { font-size: 1.05cqw; letter-spacing: .12em; text-transform: uppercase; opacity: .55; }
 .start { border: 0; background: var(--kupfer); color: #fff; font-weight: 600; font-size: 1.5cqw; letter-spacing: .12em; text-transform: uppercase;

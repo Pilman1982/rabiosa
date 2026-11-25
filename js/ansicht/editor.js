@@ -29,7 +29,7 @@ export function zeige(wurzel, ctx, quizId) {
   const s = ctx.sprache;
   const T = (k, w) => t(s, k, w);
   let quiz = null, gewaehlt = 0, abgebaut = false;
-  let speicherUhr = null, speichert = false, nochmal = false;
+  let speicherUhr = null, kette = Promise.resolve(true);
 
   const standEl = h('span', { class: 'speicherstand' });
   const maengelEl = h('div');
@@ -38,16 +38,16 @@ export function zeige(wurzel, ctx, quizId) {
 
   // ---------- Speichern ----------
   function setzeStand(k, fehler = false) { standEl.textContent = T(k); standEl.classList.toggle('fehler', fehler); }
-  async function speichere() {
+  /** Speichert nacheinander (nie zwei Speicherungen gleichzeitig). Ergebnis: true, wenn es geklappt hat. */
+  function speichere() {
     clearTimeout(speicherUhr);
     speicherUhr = null;
-    if (speichert) { nochmal = true; return; }
-    speichert = true;
-    setzeStand('editor.speichert');
-    try { await store.quiz.speichern(quiz); setzeStand('editor.gespeichert'); }
-    catch (e) { console.error(e); setzeStand('editor.nichtGespeichert', true); }
-    speichert = false;
-    if (nochmal) { nochmal = false; speichere(); }
+    kette = kette.then(async () => {
+      setzeStand('editor.speichert');
+      try { await store.quiz.speichern(quiz); setzeStand('editor.gespeichert'); return true; }
+      catch (e) { console.error(e); setzeStand('editor.nichtGespeichert', true); return false; }
+    });
+    return kette;
   }
   /** Nach jeder Änderung: bald speichern, Mängel und Liste links nachführen. */
   function geaendert() {
@@ -61,7 +61,6 @@ export function zeige(wurzel, ctx, quizId) {
   // ---------- Kopf, Mängel, Liste ----------
   function zeichneMaengel() {
     const fehler = quizFehler(quiz);
-    if (quiz.freigegeben && fehler.length) quiz.freigegeben = false;   // Unvollständiges bleibt nicht im Kollegium
     maengelEl.replaceChildren(fehler.length
       ? h('div', { class: 'maengel' }, h('b', null, T('editor.maengel')), h('ul', null, fehler.map(f => h('li', null, T('mangel.' + f.code, { nr: (f.frage ?? 0) + 1 })))))
       : h('p', { class: 'spielbar' }, '✓ ' + T('editor.spielbar')));
@@ -206,7 +205,7 @@ export function zeige(wurzel, ctx, quizId) {
     wurzel.replaceChildren(h('div', { class: 'studio editor' },
       h('header', { class: 'studiokopf' },
         h('a', { class: 'marke-klein', href: '#/studio' }, 'RABIOSA'), titel, standEl,
-        h('button', { class: 'knopf klein', onclick: async () => { await speichere(); ctx.geh('#/studio'); } }, T('editor.fertig'))),
+        h('button', { class: 'knopf klein', onclick: async () => { if (await speichere()) ctx.geh('#/studio'); } }, T('editor.fertig'))),
       h('div', { class: 'ed-meta' },
         h('label', null, h('span', { class: 'lab' }, T('editor.fach')), eingabe(quiz.fach, v => { quiz.fach = v; }, { maxlength: '40' })),
         h('label', null, h('span', { class: 'lab' }, T('editor.sprache')), sprachwahl)),
@@ -233,9 +232,14 @@ export function zeige(wurzel, ctx, quizId) {
     } catch (e) { meldung(fehlerText(s, e)); ctx.geh('#/studio'); }
   });
 
+  // Beim Schliessen des Fensters noch speichern, was offen ist.
+  const beimVerlassen = () => { if (speicherUhr && quiz) speichere(); };
+  window.addEventListener('pagehide', beimVerlassen);
+
   return () => {
     abgebaut = true;
     stopp();
-    if (speicherUhr) { clearTimeout(speicherUhr); store.quiz.speichern(quiz).catch(e => console.error(e)); }
+    window.removeEventListener('pagehide', beimVerlassen);
+    if (speicherUhr && quiz) speichere();
   };
 }

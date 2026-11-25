@@ -181,3 +181,16 @@ test('oeffentlicheFrage verrät bei keinem Typ die Lösung', () => {
     if (frage.antworten) assert.deepEqual(o.antworten, frage.antworten.map(a => a.text));
   });
 });
+
+test('normalisiere: typografischer Apostroph, Ligaturen und zerlegte Umlaute', () => {
+  assert.equal(normalisiere('Maître d’hôtel'), normalisiere("maitre d'hotel"));
+  assert.equal(normalisiere('Hors-d‘œuvre'), "hors-d'oeuvre");
+  assert.equal(normalisiere('Rösti'), normalisiere('Roesti'));
+  assert.equal(normalisiere('Cæsar'), 'caesar');
+});
+
+test('leseZahl versteht negative Zahlen, auch mit typografischem Minus', () => {
+  assert.equal(leseZahl('-18'), -18);
+  assert.equal(leseZahl('−18,5'), -18.5);
+  assert.equal(leseZahl('– 4'), -4);
+});

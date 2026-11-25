@@ -34,7 +34,9 @@ export function zeige(wurzel, ctx) {
 
   async function lade() {
     try {
-      [meine, kollegium] = await Promise.all([store.quiz.meine(), store.quiz.kollegium()]);
+      const [m, k] = await Promise.all([store.quiz.meine(), store.quiz.kollegium()]);
+      meine = m;
+      kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
     } catch (e) { meldung(fehlerText(s(), e)); meine ??= []; kollegium ??= []; }
     zeichne();
   }
@@ -48,8 +50,9 @@ export function zeige(wurzel, ctx) {
     if (neuLaden) await lade();
   }
 
-  const spiele = quiz => tue(async () => {
-    if (quizFehler(quiz).length) { ctx.geh('#/studio/quiz/' + quiz.id); return; }
+  const spiele = alt => tue(async () => {
+    const quiz = await store.quiz.laden(alt.id);   // frischer Stand, falls die Liste schon länger offen ist
+    if (quizFehler(quiz).length) { if (quiz.besitzer === konto.uid) ctx.geh('#/studio/quiz/' + quiz.id); else await lade(); return; }
     const { oeffentlich, privat } = neuesSpiel(quiz, konto.uid);
     const code = await store.spiel.erstellen(oeffentlich, privat);
     ctx.geh('#/beamer/' + code);
@@ -123,8 +126,9 @@ export function zeige(wurzel, ctx) {
   function meineKarte(q) {
     const titel = q.titel || T('editor.unbenannt');
     const unvollstaendig = quizFehler(q).length > 0;
-    const haken = h('input', { type: 'checkbox', checked: !!q.freigegeben, disabled: unvollstaendig });
-    haken.addEventListener('change', () => tue(() => store.quiz.speichern({ ...q, freigegeben: haken.checked })));
+    const haken = h('input', { type: 'checkbox', checked: !!q.freigegeben });
+    // Erst frisch laden: Die Liste kann älter sein als die letzte Änderung im Editor.
+    haken.addEventListener('change', () => { const frei = haken.checked; tue(async () => store.quiz.speichern({ ...await store.quiz.laden(q.id), freigegeben: frei })); });
     return h('article', { class: 'karte' },
       h('h3', null, titel),
       h('p', { class: 'meta' }, meta(q)),
@@ -145,6 +149,7 @@ export function zeige(wurzel, ctx) {
       h('p', { class: 'meta' }, meta(q)),
       h('div', { class: 'kartenknoepfe' },
         kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
+        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
 
@@ -176,6 +181,7 @@ export function zeige(wurzel, ctx) {
         sprachwahl(),
         h('button', { class: 'knopf klein leise', onclick: () => store.konto.abmelden() }, T('studio.abmelden'))),
       ctx.demo ? h('p', { class: 'demohinweis' }, T('allg.demo')) : null,
+      laufend ? h('p', { class: 'laufend' }, h('a', { class: 'knopf klein', href: '#/beamer/' + laufend }, T('studio.fortsetzen', { code: laufend.slice(0, 3) + ' ' + laufend.slice(3) }))) : null,
       inhalt());
   }
 
@@ -185,15 +191,26 @@ export function zeige(wurzel, ctx) {
     wurzel.replaceChildren(konto === null ? anmeldung() : konto.freigeschaltet ? studio() : freischaltung());
   }
 
-  let aufgeraeumt = false;
+  let aufgeraeumt = false, laufend = null, stoppLaufend = null;
+  /** Läuft noch ein eigenes Spiel (Fenster versehentlich geschlossen)? Dann einen Weg zurück anbieten. */
+  function sucheLaufendes() {
+    let code = null;
+    try { code = localStorage.getItem('rabiosa-laufend'); } catch { /* ohne Speicher */ }
+    if (!/^\d{6}$/.test(code || '') || stoppLaufend) return;
+    stoppLaufend = store.spiel.beobachten(code, s => {
+      const neu = s && s.hostUid === konto?.uid && s.status !== 'ende' ? code : null;
+      if (neu !== laufend) { laufend = neu; zeichne(); }
+    });
+  }
   const stopp = store.konto.beobachten(k => {
     konto = k;
     if (k && k.freigeschaltet) {
+      sucheLaufendes();
       if (!aufgeraeumt) { aufgeraeumt = true; store.spiel.aufraeumen().catch(() => {}); }
       lade();
     } else { meine = kollegium = null; }
     zeichne();
   });
   zeichne();
-  return stopp;
+  return () => { stopp(); stoppLaufend?.(); };
 }
