@@ -360,8 +360,10 @@ export function zeige(wurzel, ctx, code) {
     if (sollNachsehen({ sichtbar: !document.hidden, wartet: w, geweckt, seitKontakt: j - Math.max(letzterKontakt, wartetSeit), seitNachsehen: j - letztesNachsehen })) sieheNach();
   }, 1000);
   const wecke = () => { geweckt = true; };
+  const weckeSeite = e => { if (e.persisted) wecke(); };   // nur, wenn die Seite aus dem Zwischenspeicher zurückkommt, nicht beim Laden
   document.addEventListener('visibilitychange', wecke);
-  for (const ereignis of ['pageshow', 'online']) window.addEventListener(ereignis, wecke);
+  window.addEventListener('online', wecke);
+  window.addEventListener('pageshow', weckeSeite);
 
   if (ich) beobachteMich();
   const uhr = setInterval(takt, 200);
@@ -371,6 +373,7 @@ export function zeige(wurzel, ctx, code) {
     zu = true;
     stoppSpiel(); stoppEigen?.(); clearInterval(uhr); clearInterval(waechter);
     document.removeEventListener('visibilitychange', wecke);
-    for (const ereignis of ['pageshow', 'online']) window.removeEventListener(ereignis, wecke);
+    window.removeEventListener('online', wecke);
+    window.removeEventListener('pageshow', weckeSeite);
   };
 }
