@@ -19,7 +19,7 @@ Solange in `js/config.js` kein Firebase-Projekt eingetragen ist, läuft die Seit
 | `index.html`, `css/rabiosa.css` | Gerüst und Aussehen |
 | `js/main.js` | zeigt je nach Adresse die passende Ansicht |
 | `js/ansicht/` | Startseite, Handy (`spieler.js`), Beamer, Studio, Editor, Rückblick |
-| `js/logik/` | Punkte, Antwortprüfung, Quiz-Prüfung, Auswertung (ohne Browser testbar) |
+| `js/logik/` | Punkte, Antwortprüfung, Quiz-Prüfung, Auswertung, Import, Wächter (ohne Browser testbar) |
 | `js/store/` | Speicher: `demo.js` (Browser) und `firebase.js` (echter Betrieb), gleiche Schnittstelle |
 | `js/avatar.js`, `js/qr.js`, `js/ton.js`, `js/i18n.js` | Avatare, QR-Code, Musik, Texte deutsch/englisch |
 | `firestore.rules` | Regeln der Datenbank |
@@ -60,6 +60,16 @@ Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe,
 
 Einladungscode ändern: Feld `code` in Schritt 5 überschreiben. Bestehende Konten bleiben freigeschaltet.
 Konto sperren: in **Authentication** das Konto deaktivieren und in **Firestore > Daten > dozierende** das Dokument mit seiner Kennung löschen.
+
+## Quiz mit einer KI erstellen und importieren
+
+Im Studio öffnet **Quiz importieren** ein Fenster mit drei Schritten: Prompt kopieren, in eine KI einfügen (mit einem Thema, Unterlagen, einer Prüfung oder einem bestehenden Quiz), die Antwort der KI einfügen oder als Datei wählen. Rabiosa liest das Quiz ein, speichert es und öffnet es im Editor zum Durchlesen.
+
+- Der Prompt steht in `js/prompt.js` (deutsch und englisch). Er verlangt ein Quiz als JSON in der Form von Rabiosa und verbietet, Prüfungsfragen zu übernehmen.
+- Das Einlesen steht in `js/logik/import.js`. Es ist grosszügig beim Lesen (Text um das JSON herum, englische Feldnamen, Antworten als blosse Texte) und streng beim Ergebnis: Was fehlt, zeigt danach der Editor.
+- Ein Test prüft, dass das Beispiel im Prompt selbst ohne Mängel einlesbar ist. Wer das Format ändert, ändert Prompt und Einlesen zusammen.
+
+Quiz, die aus Prüfungen entstanden sind, gehören nicht in dieses öffentliche Repo.
 
 ## Wenn ein Handy den Anschluss verliert
 

@@ -2,6 +2,7 @@
 import { h, rueckfrage, meldung, fehlerText } from '../ui.js';
 import { t } from '../i18n.js';
 import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
+import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
@@ -57,6 +58,18 @@ export function zeige(wurzel, ctx) {
     const code = await store.spiel.erstellen(oeffentlich, privat);
     ctx.geh('#/beamer/' + code);
   }, false);
+
+  /** Quiz aus der Antwort einer KI: einlesen, speichern, im Editor zum Durchlesen öffnen. */
+  async function importiere() {
+    const ergebnis = await oeffneImport(s());
+    if (!ergebnis) return;
+    tue(async () => {
+      const id = await store.quiz.speichern(ergebnis.quiz);
+      const n = ergebnis.quiz.fragen.length, m = ergebnis.uebersprungen;
+      meldung(m ? T('import.fertigAusgelassen', { n, m }) : T('import.fertig', { n }));
+      ctx.geh('#/studio/quiz/' + id);
+    }, false);
+  }
 
   // ---------- Anmeldung ----------
   function anmeldung() {
@@ -159,6 +172,7 @@ export function zeige(wurzel, ctx) {
       return [
         h('div', { class: 'aktionen' },
           h('button', { class: 'knopf', onclick: () => tue(async () => { ctx.geh('#/studio/quiz/' + await store.quiz.speichern(neuesQuiz(s()))); }, false) }, '+ ' + T('studio.neu')),
+          h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import')),
           h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielQuiz(s()))) }, T('studio.beispiel'))),
         meine.length ? h('div', { class: 'karten' }, meine.map(meineKarte)) : h('p', { class: 'leer' }, T('studio.leer')),
       ];

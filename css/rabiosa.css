@@ -340,3 +340,21 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
   .studiokopf { gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ----- Quiz importieren ----- */
+.versteckt { display: none; }
+.importfenster { max-width: min(640px, 94vw); width: 640px; max-height: 92vh; overflow: auto; }
+.importfenster h2 { font-family: var(--serif); font-weight: 600; font-size: 24px; margin: 0 0 14px; }
+.importfenster p { margin: 0 0 8px; }
+.import-schritte { margin: 0 0 6px; padding-left: 22px; }
+.import-schritte li { margin-bottom: 14px; }
+.import-schritte li::marker { color: var(--kupfer); font-weight: 700; }
+.import-zeile { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.import-ok { color: var(--petrol); font-weight: 600; font-size: 14px; }
+.import-details { margin-top: 8px; font-size: 14px; }
+.import-details summary { cursor: pointer; color: var(--petrol); }
+.import-prompt, .import-eingabe { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.4; }
+.import-prompt { margin-top: 8px; background: var(--papier); }
+.import-fehler { color: var(--bordeaux); font-weight: 600; min-height: 1.2em; }
+.import-fehler:empty { display: none; }
+.importfenster .import-hinweis { font-size: 13px; color: var(--text-leise); margin-bottom: 18px; }
