@@ -1,9 +1,12 @@
-// Avatare: sechs EHL-Berufe als Vektorgrafik. Gesicht, Hautton, Frisur, Haarfarbe, Brille und Bart sind wählbar.
+// Avatare: sechs EHL-Berufe als Vektorgrafik. Wählbar sind Geschlecht (Frau, Mann, divers), Hautton, Frisur, Haarfarbe
+// und die Extras Brille, Bart, Schminke und Ohrstecker. Jedes Extra passt zu jedem Geschlecht.
+// Neue Felder müssen auch in firestore.rules (avatarGueltig) stehen, sonst weist die Datenbank den Beitritt ab.
 // Die Einstellung kommt von fremden Handys: Es werden nur Werte aus den festen Listen verwendet.
 
 export const BERUFE = ['kueche', 'service', 'reception', 'bellboy', 'housekeeping', 'direktion'];
 export const FRISUREN = ['kurz', 'scheitel', 'lang', 'dutt', 'locken', 'glatze'];
 export const HAARFARBEN = ['schwarz', 'dunkel', 'braun', 'blond', 'rot', 'grau'];
+export const GESCHLECHTER = ['frau', 'mann', 'divers'];
 export const HAUTTOENE = ['#F6D9C0', '#EBC09B', '#D29B6E', '#A56B43', '#6B4329'];
 const HAAR = { schwarz: '#1E1A19', dunkel: '#4A2E1F', braun: '#7A4A2B', blond: '#C9A35E', rot: '#A6482B', grau: '#B9B7B0' };
 
@@ -16,14 +19,22 @@ export function saubererAvatar(cfg) {
     frisur: FRISUREN.includes(c.frisur) ? c.frisur : FRISUREN[0],
     brille: c.brille === true,
     bart: c.bart === true,
+    // Ohne Angabe (ältere Handys, gespeicherte Profile) bleibt die Figur, wie sie war: divers.
+    geschlecht: GESCHLECHTER.includes(c.geschlecht) ? c.geschlecht : 'divers',
+    geschminkt: c.geschminkt === true,
+    ohrstecker: c.ohrstecker === true,
   };
 }
 
 export function zufallsAvatar(zufall = Math.random) {
   const aus = liste => liste[Math.min(liste.length - 1, Math.floor(zufall() * liste.length))];
+  const geschlecht = aus(GESCHLECHTER);
   return {
     beruf: aus(BERUFE), haut: Math.min(HAUTTOENE.length - 1, Math.floor(zufall() * HAUTTOENE.length)),
-    haar: aus(HAARFARBEN), frisur: aus(FRISUREN), brille: zufall() > 0.8, bart: zufall() > 0.85,
+    haar: aus(HAARFARBEN), frisur: aus(FRISUREN), brille: zufall() > 0.8,
+    // Der Zufall bleibt beim Gewohnten; von Hand lässt sich alles kombinieren.
+    bart: geschlecht !== 'frau' && zufall() > 0.8,
+    geschlecht, geschminkt: geschlecht !== 'mann' && zufall() > 0.7, ohrstecker: zufall() > 0.75,
   };
 }
 
@@ -31,6 +42,12 @@ function dunkler(hex, f) {
   const n = parseInt(hex.slice(1), 16);
   const k = v => Math.round(v * f).toString(16).padStart(2, '0');
   return '#' + k(n >> 16) + k((n >> 8) & 255) + k(n & 255);
+}
+
+function misch(a, b, anteil) {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const k = s => Math.round(((x >> s) & 255) * (1 - anteil) + ((y >> s) & 255) * anteil).toString(16).padStart(2, '0');
+  return '#' + k(16) + k(8) + k(0);
 }
 
 const KOERPER = 'M18 122 C18 98 34 88 48 85 L72 85 C86 88 102 98 102 122 Z';
@@ -97,21 +114,36 @@ export function avatarSvg(cfg, { hell = true } = {}) {
   const id = 'av' + (++zaehler);
   const h = HAUTTOENE[c.haut], hd = dunkler(h, 0.86), hf = HAAR[c.haar];
   const mitHut = c.beruf in HUT;
+  const frau = c.geschlecht === 'frau', mann = c.geschlecht === 'mann';
+  const hals = frau ? 'M53 64 h14 v21 q-7 7 -14 0z' : mann ? 'M50.5 64 h19 v21 q-9.5 7 -19 0z' : 'M52 64 h16 v21 q-8 7 -16 0z';
+  const brauen = frau ? ['M50 46.4 q3.4 -2.4 6.6 -.6 M63.4 45.8 q3.2 -1.8 6.6 .6', .85]
+    : mann ? ['M49.6 46.8 q3.4 -1.4 7 0 M63.4 46.8 q3.6 -1.4 7 0', 1.7]
+      : ['M50.2 46.6 q3.2 -1.8 6.2 -.4 M63.6 46.2 q3 -1.4 6.2 .4', 1.15];
+  const lippen = c.geschminkt ? '#B23A4E' : frau ? misch(h, '#B8475A', 0.42) : null;
+  const mund = lippen
+    ? `<path d="M54.6 61.5 q2.7 -1.5 5.4 -.3 q2.7 -1.2 5.4 .3 q-5.4 4.8 -10.8 0Z" fill="${lippen}"/>` +
+      `<path d="M54.6 61.5 q5.4 1.7 10.8 0" fill="none" stroke="${dunkler(lippen, 0.72)}" stroke-width=".7" stroke-linecap="round"/>`
+    : `<path d="M54.8 61.8 q5.2 4.2 10.4 0" fill="none" stroke="${c.bart ? '#f1e6dc' : dunkler(h, 0.6)}" stroke-width="1.5" stroke-linecap="round"/>`;
   return `<svg viewBox="0 0 120 120" class="avatar" role="img" aria-hidden="true">` +
     `<defs><clipPath id="${id}"><circle cx="60" cy="60" r="57"/></clipPath></defs>` +
     `<circle cx="60" cy="60" r="57" fill="${hell ? '#EFEBE3' : '#16306a'}"/>` +
     `<g clip-path="url(#${id})">` +
     (c.frisur === 'lang' ? `<path d="M41 50 C37 26 83 26 79 50 L83 88 C74 93 46 93 37 88Z" fill="${hf}"/>` : '') +
-    `<path d="M52 64 h16 v21 q-8 7 -16 0z" fill="${hd}"/>` +
+    `<path d="${hals}" fill="${hd}"/>` +
     UNIFORM[c.beruf] +
     `<circle cx="43.6" cy="52" r="3.1" fill="${hd}"/><circle cx="76.4" cy="52" r="3.1" fill="${hd}"/>` +
-    `<ellipse cx="60" cy="50" rx="16.6" ry="19.2" fill="${h}"/>` +
+    `<ellipse cx="60" cy="50" rx="${frau ? 16 : 16.6}" ry="19.2" fill="${h}"/>` +
+    (mann ? `<path d="M44.2 55 C44.6 66.5 51.5 70.6 60 70.6 C68.5 70.6 75.4 66.5 75.8 55Z" fill="${h}"/>` : '') +
+    (c.geschminkt ? `<g fill="#E0707A" opacity=".38"><ellipse cx="48.6" cy="57.6" rx="3.6" ry="2.4"/><ellipse cx="71.4" cy="57.6" rx="3.6" ry="2.4"/></g>` : '') +
     (c.bart ? `<path d="M44 54 C44.5 70 53 72.5 60 72.5 C67 72.5 75.5 70 76 54 C73.5 60.5 69 62.5 60 62.5 C51 62.5 46.5 60.5 44 54Z" fill="${hf}"/>` : '') +
     haarVorn(c.frisur, hf, mitHut) +
     `<ellipse cx="53.4" cy="51.5" rx="1.75" ry="2.15" fill="#1E1A19"/><ellipse cx="66.6" cy="51.5" rx="1.75" ry="2.15" fill="#1E1A19"/>` +
-    `<path d="M50.2 46.6 q3.2 -1.8 6.2 -.4 M63.6 46.2 q3 -1.4 6.2 .4" fill="none" stroke="${dunkler(hf, 0.8)}" stroke-width="1.15" stroke-linecap="round"/>` +
+    (c.geschminkt ? `<path d="M50.9 49.9 q2.5 -3.1 5 -.1 q-2.5 -1.5 -5 .1Z M64.1 49.8 q2.5 -3 5 .1 q-2.5 -1.6 -5 -.1Z" fill="#7B5EA7" opacity=".55"/>` : '') +
+    (frau || c.geschminkt ? `<path d="M51.2 50.3 q2.2 -1.9 4.4 -.2 M50.1 49.5 l1.2 .9 M64.4 50.1 q2.2 -1.7 4.4 .2 M69.9 49.5 l-1.2 .9" fill="none" stroke="#1E1A19" stroke-width=".8" stroke-linecap="round"/>` : '') +
+    `<path d="${brauen[0]}" fill="none" stroke="${dunkler(hf, 0.8)}" stroke-width="${brauen[1]}" stroke-linecap="round"/>` +
     `<path d="M60 54 q-1.6 3.8 .6 4.8" fill="none" stroke="${dunkler(h, 0.74)}" stroke-width="1.1" stroke-linecap="round"/>` +
-    `<path d="M54.8 61.8 q5.2 4.2 10.4 0" fill="none" stroke="${c.bart ? '#f1e6dc' : dunkler(h, 0.6)}" stroke-width="1.5" stroke-linecap="round"/>` +
+    mund +
+    (c.ohrstecker ? `<g fill="#E2C27A" stroke="#9c7a35" stroke-width=".35"><circle cx="43.2" cy="54.8" r="1.6"/><circle cx="76.8" cy="54.8" r="1.6"/></g>` : '') +
     (c.brille ? `<g fill="none" stroke="#1B365F" stroke-width="1.25"><circle cx="53.4" cy="51.8" r="5"/><circle cx="66.6" cy="51.8" r="5"/><path d="M58.4 51.3 q1.6 -1.2 3.2 0 M48.4 51 l-4.4 -1 M71.6 51 l4.4 -1"/></g>` : '') +
     (HUT[c.beruf] || '') +
     `</g><circle cx="60" cy="60" r="57" fill="none" stroke="#B6633F" stroke-width="2"/></svg>`;

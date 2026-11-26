@@ -39,13 +39,16 @@ service cloud.firestore {
     // in der Rangliste des Spiels landen und ein Dokument höchstens 1 MiB fasst.
     function avatarGueltig(a) {
       return a is map
-        && a.keys().hasOnly(['beruf', 'haut', 'haar', 'frisur', 'brille', 'bart'])
+        && a.keys().hasOnly(['beruf', 'haut', 'haar', 'frisur', 'brille', 'bart', 'geschlecht', 'geschminkt', 'ohrstecker'])
         && a.get('beruf', '') is string && a.get('beruf', '').size() <= 20
         && a.get('haar', '') is string && a.get('haar', '').size() <= 20
         && a.get('frisur', '') is string && a.get('frisur', '').size() <= 20
         && a.get('haut', 0) is int
         && a.get('brille', false) is bool
-        && a.get('bart', false) is bool;
+        && a.get('bart', false) is bool
+        && a.get('geschlecht', '') is string && a.get('geschlecht', '').size() <= 20
+        && a.get('geschminkt', false) is bool
+        && a.get('ohrstecker', false) is bool;
     }
 
     function spielerGueltig(schluessel) {

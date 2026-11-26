@@ -36,6 +36,10 @@ const de = {
 
   'beitritt.name': 'Dein Spitzname',
   'beitritt.nameFehlt': 'Bitte gib einen Spitznamen ein.',
+  'beitritt.geschlecht': 'Geschlecht',
+  'geschlecht.frau': 'Frau',
+  'geschlecht.mann': 'Mann',
+  'geschlecht.divers': 'Divers',
   'beitritt.beruf': 'Beruf',
   'beitritt.haut': 'Hautton',
   'beitritt.hautNr': 'Hautton {n}',
@@ -44,6 +48,8 @@ const de = {
   'beitritt.extras': 'Extras',
   'beitritt.brille': 'Brille',
   'beitritt.bart': 'Bart',
+  'beitritt.geschminkt': 'Geschminkt',
+  'beitritt.ohrstecker': 'Ohrstecker',
   'beitritt.zufall': 'Zufall',
   'beitritt.bereit': 'Bereit',
 
@@ -295,6 +301,10 @@ const en = {
 
   'beitritt.name': 'Your nickname',
   'beitritt.nameFehlt': 'Please enter a nickname.',
+  'beitritt.geschlecht': 'Gender',
+  'geschlecht.frau': 'Woman',
+  'geschlecht.mann': 'Man',
+  'geschlecht.divers': 'Non-binary',
   'beitritt.beruf': 'Profession',
   'beitritt.haut': 'Skin tone',
   'beitritt.hautNr': 'Skin tone {n}',
@@ -303,6 +313,8 @@ const en = {
   'beitritt.extras': 'Extras',
   'beitritt.brille': 'Glasses',
   'beitritt.bart': 'Beard',
+  'beitritt.geschminkt': 'Make-up',
+  'beitritt.ohrstecker': 'Ear studs',
   'beitritt.zufall': 'Random',
   'beitritt.bereit': 'Ready',
 

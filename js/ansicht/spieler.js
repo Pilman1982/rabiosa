@@ -1,7 +1,7 @@
 // Handy der Studierenden: beitreten, Avatar bauen, antworten, Rückmeldung sehen.
 import { h, avatar, BUCHSTABEN } from '../ui.js';
 import { t, zahl } from '../i18n.js';
-import { BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE, zufallsAvatar, saubererAvatar } from '../avatar.js';
+import { BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE, GESCHLECHTER, zufallsAvatar, saubererAvatar } from '../avatar.js';
 import { leseZahl } from '../logik/pruefen.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
 import { istNeuer, istAelter, anderesSpiel, sollNachsehen } from '../logik/waechter.js';
@@ -70,6 +70,8 @@ export function zeige(wurzel, ctx, code) {
       kasten.replaceChildren(
         h('div', { class: 'vorschau' }, avatar(a),
           h('button', { type: 'button', class: 'chip', onclick: () => { entwurf.avatar = zufallsAvatar(); baue(); } }, '⚄ ' + T('beitritt.zufall'))),
+        h('p', { class: 'lab' }, T('beitritt.geschlecht')),
+        h('div', { class: 'chips' }, GESCHLECHTER.map(g => chip(a.geschlecht === g, T('geschlecht.' + g), () => { a.geschlecht = g; }))),
         h('p', { class: 'lab' }, T('beitritt.beruf')),
         h('div', { class: 'chips' }, BERUFE.map(b => chip(a.beruf === b, T('beruf.' + b), () => { a.beruf = b; }))),
         h('p', { class: 'lab' }, T('beitritt.haut')),
@@ -81,7 +83,9 @@ export function zeige(wurzel, ctx, code) {
         h('p', { class: 'lab' }, T('beitritt.extras')),
         h('div', { class: 'chips' },
           chip(a.brille, T('beitritt.brille'), () => { a.brille = !a.brille; }),
-          chip(a.bart, T('beitritt.bart'), () => { a.bart = !a.bart; })));
+          chip(a.bart, T('beitritt.bart'), () => { a.bart = !a.bart; }),
+          chip(a.geschminkt, T('beitritt.geschminkt'), () => { a.geschminkt = !a.geschminkt; }),
+          chip(a.ohrstecker, T('beitritt.ohrstecker'), () => { a.ohrstecker = !a.ohrstecker; })));
     };
     baue();
     return kasten;

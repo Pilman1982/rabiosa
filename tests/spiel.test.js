@@ -196,7 +196,7 @@ test('saubereSpieler: unbrauchbare Einträge fallen weg, Namen und Avatare werde
   ]);
   assert.deepEqual(liste.map(s => [s.schluessel, s.pid, s.name]), [['k1', 'p1', 'Anna Maria'], ['k2', 'p2', 'x'.repeat(16)], ['k3', 'p3', '?']]);
   assert.equal(liste[0].avatar.beruf, 'kueche');
-  assert.deepEqual(Object.keys(liste[1].avatar).sort(), ['bart', 'beruf', 'brille', 'frisur', 'haar', 'haut']);
+  assert.deepEqual(Object.keys(liste[1].avatar).sort(), ['bart', 'beruf', 'brille', 'frisur', 'geschlecht', 'geschminkt', 'haar', 'haut', 'ohrstecker']);
 });
 
 test('saubereSpieler: eine doppelte öffentliche Kennung erbt keine fremden Punkte – wer zuerst da war, behält sie', () => {
