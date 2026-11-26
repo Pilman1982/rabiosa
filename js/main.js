@@ -57,8 +57,10 @@ async function zeige() {
   document.body.dataset.ansicht = name;
   leere(wurzel).append(h('p', { class: 'laedt' }, t(ctx.sprache, 'allg.laedt')));
   try {
+    const ansicht = ANSICHTEN[name]();   // lädt neben dem Speicher (Firebase-SDK) her, nicht erst danach
+    ansicht.catch(() => {});             // ein Fehler wird beim await unten gemeldet
     store ??= await waehleStore();
-    const modul = await ANSICHTEN[name]();
+    const modul = await ansicht;
     if (meiner !== lauf) return;
     leere(wurzel);
     abbau = modul.zeige(wurzel, ctx, ...werte) || null;

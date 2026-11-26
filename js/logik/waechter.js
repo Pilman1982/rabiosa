@@ -4,8 +4,38 @@
 
 /** So lange wartet das Handy ohne neuen Stand, bis es selbst nachsieht. Jedes Nachsehen kostet einen Lesezugriff. */
 export const NACHSEHEN_MS = 10_000;
+/** Kürzere Pause, solange nicht bewiesen ist, dass die Live-Verbindung liefert (siehe vertrauen). */
+export const NACHSEHEN_SCHNELL_MS = 2_500;
+/** Beim Laden, solange noch gar kein Stand da ist: nicht auf die Live-Verbindung warten. */
+export const ERSTER_STAND_MS = 2_000;
 /** Nach dem Aufwachen (Bildschirm an, wieder online) wird sofort nachgesehen, aber höchstens so oft. */
 export const WECK_PAUSE_MS = 1500;
+/** Kommt eine Frage später als so nach ihrem Start an, gilt die Live-Verbindung als zu langsam. */
+export const LIVE_SPAET_MS = 3_000;
+
+/**
+ * Vertrauen in die Live-Verbindung, gezählt als Schuld: Bei 0 liefert sie, das Handy sieht nur selten selbst nach.
+ * Am Anfang ist nichts bewiesen (eine pünktliche Lieferung genügt). Nach einem Aussetzer braucht es drei.
+ */
+export const SCHULD_START = 1;
+const SCHULD_VERPASST = 3;
+export function vertrauen(schuld, ereignis) {
+  if (ereignis === 'verpasst') return SCHULD_VERPASST;
+  if (ereignis === 'geliefert') return Math.max(0, schuld - 1);
+  return schuld;
+}
+
+/** Pause zwischen zwei Blicken. Liegt ein Handy lange offen, ohne dass sich etwas tut, fragt es immer seltener. */
+export function nachsehTakt(schuld, seitKontakt = 0) {
+  if (seitKontakt > 30 * 60_000) return 60_000;
+  if (seitKontakt > 5 * 60_000) return NACHSEHEN_MS;
+  return schuld > 0 ? NACHSEHEN_SCHNELL_MS : NACHSEHEN_MS;
+}
+
+/** Kam eine Frage über die Live-Verbindung deutlich nach ihrem Start an? «jetzt» nach der Uhr des Servers. */
+export function liveSpaet(spiel, jetzt) {
+  return !!spiel && spiel.status === 'frage' && typeof spiel.frageStart === 'number' && jetzt - spiel.frageStart > LIVE_SPAET_MS;
+}
 
 /** Wie weit ein Spiel ist. Ein Spiel läuft nur vorwärts: Warteraum, Frage 0, Auflösung 0, Frage 1, … Podest, Ende. */
 export function fortschritt(spiel) {
@@ -40,11 +70,12 @@ export function istAelter(neu, alt) {
 }
 
 /**
- * Jetzt nachsehen? Nur bei sichtbarer Seite. Nach dem Aufwachen sofort; sonst nur, wenn das Handy auf die
- * Lehrperson wartet und seit NACHSEHEN_MS weder ein Stand gekommen ist noch nachgesehen wurde.
+ * Jetzt nachsehen? Nur bei sichtbarer Seite. Nach dem Aufwachen und beim Laden (noch kein Stand) sofort; sonst nur,
+ * wenn das Handy auf die Lehrperson wartet und seit «takt» weder ein Stand gekommen ist noch nachgesehen wurde.
  */
-export function sollNachsehen({ sichtbar, wartet, geweckt, seitKontakt, seitNachsehen }) {
+export function sollNachsehen({ sichtbar, wartet, geweckt, ohneStand, seitKontakt, seitNachsehen, takt = NACHSEHEN_MS }) {
   if (!sichtbar) return false;
   if (geweckt) return seitNachsehen >= WECK_PAUSE_MS;
-  return !!wartet && seitKontakt >= NACHSEHEN_MS && seitNachsehen >= NACHSEHEN_MS;
+  if (ohneStand) return seitNachsehen >= ERSTER_STAND_MS;
+  return !!wartet && seitKontakt >= takt && seitNachsehen >= takt;
 }

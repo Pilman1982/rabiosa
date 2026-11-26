@@ -118,3 +118,57 @@ test('Demo-Speicher: nachsehen liefert den aktuellen Stand, ohne zu beobachten',
   assert.equal(stand.status, 'frage');
   assert.equal(stand.code, code);
 });
+
+// ---------- Takt des Nachsehens ----------
+import { vertrauen, nachsehTakt, liveSpaet, NACHSEHEN_SCHNELL_MS, ERSTER_STAND_MS, LIVE_SPAET_MS, SCHULD_START } from '../js/logik/waechter.js';
+
+test('sollNachsehen: beim Laden ohne Stand sofort, nicht erst nach der langen Pause', () => {
+  const laedt = { sichtbar: true, wartet: true, ohneStand: true, seitKontakt: 0, seitNachsehen: ERSTER_STAND_MS };
+  assert.equal(sollNachsehen(laedt), true, 'nicht auf die Live-Verbindung warten');
+  assert.equal(sollNachsehen({ ...laedt, seitNachsehen: ERSTER_STAND_MS - 1 }), false, 'eben erst versucht');
+  assert.equal(sollNachsehen({ ...laedt, sichtbar: false }), false);
+});
+
+test('sollNachsehen: der Takt bestimmt die Pause beim Warten', () => {
+  const schnell = { sichtbar: true, wartet: true, takt: NACHSEHEN_SCHNELL_MS, seitKontakt: NACHSEHEN_SCHNELL_MS, seitNachsehen: NACHSEHEN_SCHNELL_MS };
+  assert.equal(sollNachsehen(schnell), true);
+  assert.equal(sollNachsehen({ ...schnell, seitKontakt: NACHSEHEN_SCHNELL_MS - 1 }), false);
+  assert.equal(sollNachsehen({ ...schnell, seitNachsehen: NACHSEHEN_SCHNELL_MS - 1 }), false);
+  assert.equal(sollNachsehen({ ...schnell, takt: undefined }), false, 'ohne Angabe gilt die lange Pause');
+});
+
+test('vertrauen: Die Live-Verbindung muss sich bewähren, ein Aussetzer kostet drei Lieferungen', () => {
+  assert.ok(SCHULD_START > 0, 'am Anfang ist noch nichts bewiesen');
+  let schuld = vertrauen(SCHULD_START, 'geliefert');
+  assert.equal(schuld, 0, 'eine pünktliche Lieferung genügt am Anfang');
+  assert.equal(vertrauen(schuld, 'geliefert'), 0);
+  schuld = vertrauen(schuld, 'verpasst');
+  assert.ok(schuld >= 3);
+  schuld = vertrauen(vertrauen(schuld, 'geliefert'), 'geliefert');
+  assert.ok(schuld > 0, 'zwei Lieferungen reichen danach noch nicht');
+  assert.equal(vertrauen(schuld, 'geliefert'), 0);
+  assert.equal(vertrauen(2, 'anderes'), 2);
+});
+
+test('nachsehTakt: schnell, solange die Live-Verbindung nicht bewiesen ist; ruhig, wenn sie liefert', () => {
+  assert.equal(nachsehTakt(SCHULD_START, 0), NACHSEHEN_SCHNELL_MS);
+  assert.equal(nachsehTakt(0, 0), NACHSEHEN_MS);
+  assert.ok(NACHSEHEN_SCHNELL_MS <= 3000, 'eine verpasste Frage soll in wenigen Sekunden da sein');
+});
+
+test('nachsehTakt: ein Handy, das lange offen liegt, fragt immer seltener', () => {
+  assert.equal(nachsehTakt(3, 4 * 60_000), NACHSEHEN_SCHNELL_MS, 'ein paar Minuten Warteraum sind normal');
+  assert.equal(nachsehTakt(3, 6 * 60_000), NACHSEHEN_MS);
+  assert.ok(nachsehTakt(3, 31 * 60_000) >= 60_000);
+  assert.ok(nachsehTakt(0, 31 * 60_000) >= 60_000);
+});
+
+test('liveSpaet: eine Frage, die deutlich nach ihrem Start ankommt', () => {
+  const frage = spiel('frage', 2, { frageStart: 50_000 });
+  assert.equal(liveSpaet(frage, 50_000 + LIVE_SPAET_MS + 1), true);
+  assert.equal(liveSpaet(frage, 50_000 + 400), false, 'pünktlich');
+  assert.equal(liveSpaet(frage, 49_000), false, 'Uhr des Handys geht nach');
+  assert.equal(liveSpaet(spiel('aufloesung', 2, { frageStart: 50_000 }), 90_000), false, 'nur Fragen haben einen Startzeitpunkt, der dazu passt');
+  assert.equal(liveSpaet(spiel('frage', 2), 90_000), false, 'ohne Startzeit kein Urteil');
+  assert.equal(liveSpaet(null, 90_000), false);
+});

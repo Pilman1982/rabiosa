@@ -77,7 +77,10 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   const app = appSdk.getApps().length ? appSdk.getApp() : appSdk.initializeApp(config);
   const auth = authSdk.getAuth(app);
   let db;
-  try { db = fs.initializeFirestore(app, { ignoreUndefinedProperties: true }); }
+  // Long-Polling statt Streaming: Safari ab 26.4 (iPhone und Mac) hält gestreamte Antworten von Firestore bis zu
+  // 30 Sekunden zurück – Abrufe hängen, Änderungen kommen nicht an (firebase-js-sdk, Issue 9789, Fehler in WebKit).
+  // Beim Long-Polling ist jede Antwort eine abgeschlossene Anfrage; das läuft in allen Browsern gleich.
+  try { db = fs.initializeFirestore(app, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true }); }
   catch { db = fs.getFirestore(app); }   // war schon eingerichtet
 
   const { doc, collection, query, where, limit, getDoc, getDocFromServer, getDocs, setDoc, updateDoc, deleteDoc,

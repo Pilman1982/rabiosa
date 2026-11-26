@@ -4,7 +4,7 @@ import { t, zahl } from '../i18n.js';
 import { BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE, GESCHLECHTER, zufallsAvatar, saubererAvatar } from '../avatar.js';
 import { leseZahl } from '../logik/pruefen.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
-import { istNeuer, istAelter, anderesSpiel, sollNachsehen } from '../logik/waechter.js';
+import { istNeuer, istAelter, anderesSpiel, sollNachsehen, vertrauen, nachsehTakt, liveSpaet, SCHULD_START } from '../logik/waechter.js';
 
 const HAARCODE = { schwarz: '#1E1A19', dunkel: '#4A2E1F', braun: '#7A4A2B', blond: '#C9A35E', rot: '#A6482B', grau: '#B9B7B0' };
 const NAME_MAX = 16;
@@ -329,9 +329,19 @@ export function zeige(wurzel, ctx, code) {
     zeichne();
   }
   let letzterKontakt = Date.now();
+  let schuld = SCHULD_START;                  // Vertrauen in die Live-Verbindung, siehe waechter.js
+  let wachSeit = Date.now();                  // seit wann die Seite (wieder) sichtbar ist
+  const zaehler = { live: 0, waechter: 0, spaet: 0 };
   const stoppSpiel = store.spiel.beobachten(code, s => {
     letzterKontakt = Date.now();
     if (istAelter(s, spiel)) return;   // die Live-Verbindung hinkt dem nachgesehenen Stand noch hinterher
+    if (spiel !== undefined && istNeuer(s, spiel)) {
+      // War die Seite beim Start der Frage noch nicht (wieder) sichtbar, sagt die Verspätung nichts über die Verbindung.
+      const spaet = liveSpaet(s, store.jetzt()) && store.jetzt() - s.frageStart < Date.now() - wachSeit;
+      schuld = vertrauen(schuld, spaet ? 'verpasst' : 'geliefert');
+      zaehler.live++;
+      if (spaet) zaehler.spaet++;
+    }
     uebernimm(s);
   });
 
@@ -346,24 +356,38 @@ export function zeige(wurzel, ctx, code) {
   async function sieheNach() {
     if (siehtNach) return;
     siehtNach = true;
+    const imTakt = !geweckt;   // nach dem Aufwachen ist ein verpasster Stand normal, im Takt ein Aussetzer
     geweckt = false;
     letztesNachsehen = Date.now();
     try {
       const stand = await store.spiel.nachsehen(code);
       if (!zu && istNeuer(stand, spiel)) {
+        const ersterStand = spiel === undefined;   // beim Laden war das Nachsehen bloss schneller: kein Aussetzer
+        if (!ersterStand) {
+          zaehler.waechter++;
+          if (imTakt) schuld = vertrauen(schuld, 'verpasst');
+        }
         uebernimm(stand);
-        if (!sendet) store.verbindungNeu().catch(() => {});   // die Live-Verbindung hat etwas verpasst
+        if (!ersterStand && !sendet) store.verbindungNeu().catch(() => {});   // die Live-Verbindung hat etwas verpasst
       }
     } catch { /* kein Netz: beim nächsten Mal */ }
     finally { siehtNach = false; letztesNachsehen = Date.now(); }
   }
-  const waechter = setInterval(() => {
+  function pruefeTakt() {
     const j = Date.now(), w = wartet();
     if (w && !warWartend) wartetSeit = j;   // eben geantwortet oder Zeit um: Die Auflösung kommt gleich von selbst
     warWartend = w;
-    if (sollNachsehen({ sichtbar: !document.hidden, wartet: w, geweckt, seitKontakt: j - Math.max(letzterKontakt, wartetSeit), seitNachsehen: j - letztesNachsehen })) sieheNach();
-  }, 1000);
-  const wecke = () => { geweckt = true; };
+    const takt = nachsehTakt(schuld, j - letzterKontakt);
+    if (sollNachsehen({ sichtbar: !document.hidden, wartet: w, geweckt, ohneStand: spiel === undefined, takt,
+      seitKontakt: j - Math.max(letzterKontakt, wartetSeit), seitNachsehen: j - letztesNachsehen })) sieheNach();
+    if (diagnose) diagnose.textContent = `live ${zaehler.live} (spät ${zaehler.spaet}) · Wächter ${zaehler.waechter} · Takt ${takt / 1000} s`;
+  }
+  // Mit ?diagnose in der Adresse zeigt das Handy unten, wer die Stände geliefert hat (Live-Verbindung oder Wächter).
+  const diagnose = new URLSearchParams(location.search).has('diagnose')
+    ? document.body.appendChild(h('p', { style: 'position:fixed;left:0;right:0;bottom:0;margin:0;padding:2px 8px;font:11px/1.4 monospace;background:#000;color:#fff;opacity:.75;z-index:99;text-align:center' }))
+    : null;
+  const waechter = setInterval(pruefeTakt, 500);
+  const wecke = () => { geweckt = true; if (!document.hidden) wachSeit = Date.now(); };
   const weckeSeite = e => { if (e.persisted) wecke(); };   // nur, wenn die Seite aus dem Zwischenspeicher zurückkommt, nicht beim Laden
   document.addEventListener('visibilitychange', wecke);
   window.addEventListener('online', wecke);
@@ -372,10 +396,12 @@ export function zeige(wurzel, ctx, code) {
   if (ich) beobachteMich();
   const uhr = setInterval(takt, 200);
   zeichne();
+  pruefeTakt();   // gleich beim Laden nachsehen: Der erste Stand soll nicht an der Live-Verbindung hängen
 
   return () => {
     zu = true;
     stoppSpiel(); stoppEigen?.(); clearInterval(uhr); clearInterval(waechter);
+    diagnose?.remove();
     document.removeEventListener('visibilitychange', wecke);
     window.removeEventListener('online', wecke);
     window.removeEventListener('pageshow', weckeSeite);
