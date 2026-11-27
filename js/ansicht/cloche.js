@@ -5,7 +5,7 @@ import { t, zahl } from '../i18n.js';
 import { quizFehler } from '../logik/quiz.js';
 import {
   KARTEN, MIT_ZIEL, KARTEN_WERT, MIN_GRUPPEN, MAX_GRUPPEN, NAME_MAX,
-  baueBoard, neuesCloche, gemischteReihe, schritt, rueckgaengig, rangliste, sichereStand, ladeStand, SPEICHER_KEY,
+  baueBoard, neuesCloche, gemischteReihe, zurueckInDieFrage, schritt, rueckgaengig, rangliste, sichereStand, ladeStand, SPEICHER_KEY,
 } from '../logik/cloche.js';
 import ton from '../ton.js';
 
@@ -53,7 +53,10 @@ export function zeige(wurzel, ctx, quizId) {
   function zurueck() {
     if (!stand?.zurueck?.length) return;
     const neu = rueckgaengig(stand);
-    if (neu.phase === 'frage') { teil = 'loesung'; richtigWahl = neu.gruppen.map(() => false); stoppeUhr(); }
+    ziel = null;
+    // Nur wenn Rückgängig eine Bewertung oder Karte zurücknimmt, zeigt die Frage wieder die Lösung.
+    // Eine Korrektur während der laufenden Frage lässt Uhr, Ansicht und Bewertung, wie sie sind.
+    if (zurueckInDieFrage(stand, neu)) { teil = 'loesung'; richtigWahl = neu.gruppen.map(() => false); stoppeUhr(); }
     if (neu.phase === 'board') stoppeUhr();
     setze(neu);
   }
@@ -120,7 +123,7 @@ export function zeige(wurzel, ctx, quizId) {
       knopf(ton.stumm ? '🔇' : '🔊', T(ton.stumm ? 'beamer.tonAn' : 'beamer.tonAus'), () => { ton.stumm = !ton.stumm; zeichne(); }),
       knopf('⛶', T('beamer.vollbild'), () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => {}); }),
       imSpiel && stand.zurueck.length ? knopf('↶', T('cloche.rueckgaengig'), zurueck) : null,
-      imSpiel ? knopf('±', T('cloche.korrigieren'), () => { korrektur = !korrektur; zeichne(); }, korrektur) : null,
+      imSpiel && stand.phase !== 'frage' ? knopf('±', T('cloche.korrigieren'), () => { korrektur = !korrektur; zeichne(); }, korrektur) : null,
       imSpiel ? knopf('✕', T('cloche.beenden'), async () => { if (await rueckfrage(sprache(), T('cloche.beendenFrage'), T('cloche.beenden'))) tue({ typ: 'beende' }); }) : null,
       knopf('⌂', T('cloche.zumStudio'), () => ctx.geh('#/studio')));
   }
@@ -311,6 +314,7 @@ export function zeige(wurzel, ctx, quizId) {
   }
 
   function endeSeite() {
+    primaer = null;
     const r = rangliste(stand.gruppen);
     const platz = (e, klasse) => e ? h('div', { class: 'pl cl-pl ' + klasse },
       h('div', { class: 'cl-medaille', style: `background:${e.farbe}` }, e.rang),
@@ -324,7 +328,11 @@ export function zeige(wurzel, ctx, quizId) {
       platz(r[0], 'eins'), platz(r[1], 'zwei'), platz(r[2], 'drei'),
       r.length > 3 ? h('div', { class: 'liste' }, r.slice(3).map(e => h('div', null, h('span', null, h('em', null, e.rang), e.name), h('span', null, zahl(e.punkte))))) : null,
       logo(sprache(), 'weiss'),
-      haupt(T('cloche.neuesSpiel'), neuesSpiel));
+      // Ohne Leertaste und mit Rückfrage: Ein Tastendruck zu viel soll die Rangliste nicht löschen.
+      h('div', { class: 'hauptknopf' }, h('button', { class: 'start', onclick: async e => {
+        e.currentTarget.blur();
+        if (await rueckfrage(sprache(), T('cloche.neuesSpielFrage'), T('cloche.neuesSpiel'))) neuesSpiel();
+      } }, T('cloche.neuesSpiel'))));
   }
 
   // ---------- Abläufe ----------

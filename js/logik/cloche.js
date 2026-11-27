@@ -3,7 +3,7 @@
 import { clocheFelder } from './quiz.js';
 
 export const PUNKTE_JE_STUFE = { 1: 100, 2: 200, 3: 300 };
-export const MAX_FELDER = 36, MAX_SPALTEN = 8, MIN_GRUPPEN = 2, MAX_GRUPPEN = 8, NAME_MAX = 20;
+export const MAX_FELDER = 36, MAX_SPALTEN = 8, MAX_ZEILEN = 6, MIN_GRUPPEN = 2, MAX_GRUPPEN = 8, NAME_MAX = 20;
 export const ANTEIL_UEBERRASCHUNG = 0.2;
 export const KARTEN = ['trinkgeld', 'doppelt', 'inspektor', 'mundraub', 'tischwechsel', 'spendierrunde'];
 export const MIT_ZIEL = new Set(['mundraub', 'tischwechsel', 'spendierrunde']);
@@ -23,7 +23,7 @@ function mische(liste, zufall) {
   return a;
 }
 
-/** Board aus den Fragen: Spalten nach Thema (höchstens 8), sonst nummerierte Felder. Höchstens 36 Felder. */
+/** Board aus den Fragen: Spalten nach Thema (höchstens 8 Themen, höchstens 6 Felder pro Spalte), sonst nummerierte Felder. Höchstens 36 Felder. */
 export function baueBoard(fragen, zufall = Math.random) {
   let indizes = fragen.map((_, i) => i);
   if (indizes.length > MAX_FELDER) indizes = mische(indizes, zufall).slice(0, MAX_FELDER).sort((a, b) => a - b);
@@ -36,8 +36,11 @@ export function baueBoard(fragen, zufall = Math.random) {
     if (!gruppen.has(schluessel)) { gruppen.set(schluessel, []); if (schluessel) reihenfolge.push(schluessel); }
     gruppen.get(schluessel).push(f);
   }
+  const themen = reihenfolge.length;
   if (gruppen.has('')) reihenfolge.push('');
-  const mitThemen = reihenfolge.some(Boolean) && reihenfolge.length <= MAX_SPALTEN;
+  // Ein Themen-Board braucht mindestens zwei Spalten, höchstens 8 echte Themen und keine zu hohen Spalten.
+  const hoechste = Math.max(...reihenfolge.map(k => gruppen.get(k).length));
+  const mitThemen = themen >= 1 && themen <= MAX_SPALTEN && reihenfolge.length >= 2 && hoechste <= MAX_ZEILEN;
 
   if (!mitThemen) return { art: 'nummern', spalten: [], felder: info.map((f, i) => ({ nr: i + 1, ...f })) };
 
@@ -117,6 +120,8 @@ export function schritt(stand, aktion) {
     case 'karte': {
       if (s.phase !== 'karte' || !feld) return unveraendert();
       const ziel = Number.isInteger(aktion.ziel) ? aktion.ziel : null;
+      // Eine Karte mit Ziel wartet, bis ein gültiges Ziel gewählt ist, statt still zu verfallen.
+      if (MIT_ZIEL.has(s.karten[feld.nr]) && (ziel === null || ziel === s.amZug || !s.gruppen[ziel])) return unveraendert();
       s.gruppen = wendeKarteAn(s.gruppen, s.karten[feld.nr], s.amZug, ziel, feld.wert, !!s.richtig?.[s.amZug]);
       return weiter(s);
     }
@@ -165,4 +170,9 @@ export function gemischteReihe(n, nr) {
   const gemischt = Array.from({ length: n }, (_, i) => (i * k + nr) % n);
   const ok = new Set(gemischt).size === n && gemischt.some((j, i) => j !== i);
   return ok ? gemischt : Array.from({ length: n }, (_, i) => n - 1 - i);
+}
+
+/** Nach «Rückgängig»: Zeigt die Ansicht die Frage wieder von vorn (statt im laufenden Zustand zu bleiben)? */
+export function zurueckInDieFrage(vorher, nachher) {
+  return nachher.phase === 'frage' && (vorher.phase !== 'frage' || vorher.offen !== nachher.offen);
 }

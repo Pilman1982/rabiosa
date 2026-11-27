@@ -238,3 +238,37 @@ test('gemischteReihe: echte Mischung, für dasselbe Feld immer gleich', async ()
     assert.deepEqual(gemischteReihe(n, nr), r);
   }
 });
+
+test('Prüfung: ein einziges Thema oder sehr ungleiche Spalten ergeben nummerierte Felder', () => {
+  assert.equal(baueBoard(Array.from({ length: 24 }, () => frage('Hygiene', 1)), zufallAus()).art, 'nummern');
+  const schief = [frage('A', 1), frage('A', 2), frage('A', 3), ...Array.from({ length: 30 }, () => frage('', null))];
+  assert.equal(baueBoard(schief, zufallAus()).art, 'nummern');
+  assert.equal(baueBoard(themenFragen(['A'], [1, 2, 3]), zufallAus()).art, 'nummern', 'eine Spalte allein ist kein Board');
+});
+
+test('Prüfung: 8 Themen und eine Frage ohne Thema bleiben ein Themen-Board', () => {
+  const b = baueBoard([...themenFragen(ACHT), frage('', 1)], zufallAus());
+  assert.equal(b.art, 'themen');
+  assert.equal(b.spalten.length, 9);
+  assert.equal(b.spalten[8].thema, '');
+});
+
+test('Prüfung: Karte mit Ziel ohne gültiges Ziel wird nicht verbraucht', () => {
+  const s0 = spiel();
+  const nr = feldMitWert(s0, 100);
+  let s = { ...s0, karten: { [nr]: 'mundraub' } };
+  s = schritt(schritt(s, { typ: 'oeffne', feld: nr }), { typ: 'bewerte', richtig: [false, false, false, false] });
+  assert.equal(s.phase, 'karte');
+  assert.equal(schritt(s, { typ: 'karte' }).phase, 'karte');
+  assert.equal(schritt(s, { typ: 'karte', ziel: s.amZug }).phase, 'karte');
+  assert.equal(schritt(s, { typ: 'karte', ziel: 1 }).phase, 'board');
+});
+
+test('Prüfung: zurueckInDieFrage nur, wenn Rückgängig eine andere Phase verlässt', async () => {
+  const { zurueckInDieFrage } = await import('../js/logik/cloche.js');
+  const offen = schritt(spiel(), { typ: 'oeffne', feld: 1 });
+  const korrigiert = schritt(offen, { typ: 'korrigiere', gruppe: 0, delta: 100 });
+  assert.equal(zurueckInDieFrage(korrigiert, rueckgaengig(korrigiert)), false, 'Korrektur in derselben Frage');
+  const bewertet = schritt(offen, { typ: 'bewerte', richtig: [true, false, false, false] });
+  assert.equal(zurueckInDieFrage(bewertet, rueckgaengig(bewertet)), true, 'Bewertung zurückgenommen');
+});

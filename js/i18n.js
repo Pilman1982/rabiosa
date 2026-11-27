@@ -343,6 +343,7 @@ const de = {
   'druck.eckenHilfe': '{n} Blätter A4 quer: je ein Buchstabe pro Ecke des Zimmers. Richtig/Falsch-Fragen spielen mit den Ecken A und B.',
   'druck.schilder': 'Schilder',
   'druck.schilderHilfe': '{n} Blätter A4 hoch: pro Gruppe ein Satz Schilder zum Ausschneiden.',
+  'cloche.neuesSpielFrage': 'Neues Spiel beginnen? Die Rangliste dieses Spiels wird gelöscht.',
 };
 
 const en = {
@@ -685,6 +686,7 @@ const en = {
   'druck.eckenHilfe': '{n} sheets A4 landscape: one letter for each corner of the room. True/false questions use corners A and B.',
   'druck.schilder': 'Signs',
   'druck.schilderHilfe': '{n} sheets A4 portrait: one set of signs per group, to cut out.',
+  'cloche.neuesSpielFrage': 'Start a new game? The ranking of this game will be deleted.',
 };
 
 export const TEXTE = { de, en };

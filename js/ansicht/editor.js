@@ -61,10 +61,11 @@ export function zeige(wurzel, ctx, quizId) {
   // ---------- Kopf, Mängel, Liste ----------
   function zeichneMaengel() {
     const fehler = quizFehler(quiz);
-    maengelEl.replaceChildren(fehler.length
+    const teile = [fehler.length
       ? h('div', { class: 'maengel' }, h('b', null, T('editor.maengel')), h('ul', null, fehler.map(f => h('li', null, T('mangel.' + f.code, { nr: (f.frage ?? 0) + 1 })))))
-      : h('p', { class: 'spielbar' }, '✓ ' + T('editor.spielbar')),
-      zuVieleFuerEcken(quiz) ? h('p', { class: 'hilfe' }, T('editor.eckenHinweis')) : null);
+      : h('p', { class: 'spielbar' }, '✓ ' + T('editor.spielbar'))];
+    if (zuVieleFuerEcken(quiz)) teile.push(h('p', { class: 'hilfe' }, T('editor.eckenHinweis')));
+    maengelEl.replaceChildren(...teile);
   }
 
   function zeichneListe() {
