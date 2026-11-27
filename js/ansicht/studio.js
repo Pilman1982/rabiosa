@@ -154,6 +154,7 @@ export function zeige(wurzel, ctx) {
       h('label', { class: 'schalter' }, haken, T('studio.freigeben')),
       h('div', { class: 'kartenknoepfe' },
         unvollstaendig ? null : kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
+        unvollstaendig ? null : kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), ''),
         h('a', { class: 'knopf klein leise', href: '#/studio/quiz/' + q.id }, T('studio.bearbeiten')),
         h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
         kleinerKnopf(T('studio.duplizieren'), () => tue(() => kopiereQuiz(store, q, `${titel} (${T('studio.kopie')})`))),
@@ -170,6 +171,7 @@ export function zeige(wurzel, ctx) {
       mitOrt ? ablageort(q) : null,
       h('div', { class: 'kartenknoepfe' },
         kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
+        kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), ''),
         h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
