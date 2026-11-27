@@ -334,6 +334,15 @@ const de = {
   'karte.spendierrunde': 'Spendierrunde',
   'karte.spendierrunde.kurz': '{w} verschenken',
   'karte.spendierrunde.lang': 'Schenkt einer Gruppe nach Wahl {w} Punkte (höchstens so viele, wie sie selbst hat).',
+  'druck.nurEcken': 'Nur Ecken',
+  'druck.nurSchilder': 'Nur Schilder',
+  'druck.hinweis': 'Tipp: Im Druckfenster «Hintergrundgrafiken» einschalten, damit die Farben mitkommen. Die Buchstaben sind auch schwarzweiss gut lesbar.',
+  'druck.drucken': 'Drucken',
+  'druck.schliessen': 'Schliessen',
+  'druck.ecken': 'Ecken',
+  'druck.eckenHilfe': '{n} Blätter A4 quer: je ein Buchstabe pro Ecke des Zimmers. Richtig/Falsch-Fragen spielen mit den Ecken A und B.',
+  'druck.schilder': 'Schilder',
+  'druck.schilderHilfe': '{n} Blätter A4 hoch: pro Gruppe ein Satz Schilder zum Ausschneiden.',
 };
 
 const en = {
@@ -667,6 +676,15 @@ const en = {
   'karte.spendierrunde': 'Round on the house',
   'karte.spendierrunde.kurz': 'give away {w}',
   'karte.spendierrunde.lang': 'Gives {w} points to a group of your choice (at most what you have).',
+  'druck.nurEcken': 'Corners only',
+  'druck.nurSchilder': 'Signs only',
+  'druck.hinweis': 'Tip: turn on "Background graphics" in the print dialog to keep the colours. The letters are also easy to read in black and white.',
+  'druck.drucken': 'Print',
+  'druck.schliessen': 'Close',
+  'druck.ecken': 'Corners',
+  'druck.eckenHilfe': '{n} sheets A4 landscape: one letter for each corner of the room. True/false questions use corners A and B.',
+  'druck.schilder': 'Signs',
+  'druck.schilderHilfe': '{n} sheets A4 portrait: one set of signs per group, to cut out.',
 };
 
 export const TEXTE = { de, en };
