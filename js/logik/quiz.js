@@ -92,3 +92,13 @@ export function beispielQuiz(sprache = 'de') {
     ],
   };
 }
+
+// ---------- Cloche: Thema und Stufe pro Frage (beide freiwillig) ----------
+export const THEMA_MAX = 40;
+
+/** Thema und Stufe einer Frage, bereinigt: Thema getrimmt (höchstens 40 Zeichen), Stufe 1, 2, 3 oder null. */
+export function clocheFelder(frage) {
+  const thema = typeof frage?.thema === 'string' ? frage.thema.trim().slice(0, THEMA_MAX) : '';
+  const n = Number(frage?.stufe);
+  return { thema, stufe: n === 1 || n === 2 || n === 3 ? n : null };
+}
