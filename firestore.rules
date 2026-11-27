@@ -192,5 +192,34 @@ service cloud.firestore {
         allow read, delete: if angemeldet() && darfSpielVerwalten(code);
       }
     }
+
+    // ── Check-out Passugg (Escape Room Schulhotel, Myst-Fassung): Rangliste pro Klasse ─────────────
+    // Gehört nicht zu Rabiosa selbst. Die App (09 Hilfsmittel/Escape Room Schulhotel, Quelle/rangliste.js) schreibt
+    // ohne Anmeldung nur ins Projekt «Rabiosa Student». Jeder darf lesen und einen gültigen Eintrag anlegen,
+    // niemand darf ändern oder löschen (ausser in der Konsole). Kennung = Lauf-ID, also höchstens ein Eintrag pro Lauf.
+    function checkoutEintragGueltig(lauf) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['paket', 'trakt', 'klasse', 'name', 'spieler', 'zeitSek', 'strafSek', 'wertungSek', 'fehler', 'tipps', 'version', 'lauf', 'erstellt'])
+        && d.keys().hasAll(['paket', 'trakt', 'klasse', 'name', 'spieler', 'zeitSek', 'strafSek', 'wertungSek', 'fehler', 'tipps', 'version', 'lauf', 'erstellt'])
+        && d.lauf == lauf && lauf.matches('^[a-z0-9]{12}$')
+        && d.paket is string && d.paket.size() <= 40
+        && d.trakt is string && d.trakt.size() <= 40
+        && d.klasse is string && d.klasse.matches('^[A-Z0-9-]{2,16}$')
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 20
+        && d.spieler is string && d.spieler.matches('^[a-z0-9]{16}$')
+        && d.version is string && d.version.size() <= 10
+        && d.zeitSek is int && d.zeitSek >= 30 && d.zeitSek <= 86400
+        && d.strafSek is int && d.strafSek >= 0 && d.strafSek <= 86400
+        && d.wertungSek is int && d.wertungSek == d.zeitSek + d.strafSek
+        && d.fehler is int && d.fehler >= 0 && d.fehler <= 1000
+        && d.tipps is int && d.tipps >= 0 && d.tipps <= 1000
+        && d.erstellt == request.time;
+    }
+
+    match /checkout_rangliste/{lauf} {
+      allow read: if true;
+      allow update, delete: if false;
+      allow create: if checkoutEintragGueltig(lauf);
+    }
   }
 }
