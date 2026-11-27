@@ -336,14 +336,15 @@ const de = {
   'karte.spendierrunde.lang': 'Schenkt einer Gruppe nach Wahl {w} Punkte (höchstens so viele, wie sie selbst hat).',
   'druck.nurEcken': 'Nur Ecken',
   'druck.nurSchilder': 'Nur Schilder',
-  'druck.hinweis': 'Tipp: Im Druckfenster «Hintergrundgrafiken» einschalten, damit die Farben mitkommen. Die Buchstaben sind auch schwarzweiss gut lesbar.',
+  'druck.hinweis': 'Tipp: Im Druckfenster «Hintergrundgrafiken» einschalten, damit die Farben mitkommen. Die Blätter haben einen Rand von 10 mm und gehen auch schwarzweiss.',
   'druck.drucken': 'Drucken',
   'druck.schliessen': 'Schliessen',
   'druck.ecken': 'Ecken',
   'druck.eckenHilfe': '{n} Blätter A4 quer: je ein Buchstabe pro Ecke des Zimmers. Richtig/Falsch-Fragen spielen mit den Ecken A und B.',
   'druck.schilder': 'Schilder',
-  'druck.schilderHilfe': '{n} Blätter A4 hoch: pro Gruppe ein Satz Schilder zum Ausschneiden.',
+  'druck.schilderHilfe': '{n} Blätter A4 hoch mit je zwei Schildern (A5) zum Ausschneiden, pro Gruppe ein Satz.',
   'cloche.neuesSpielFrage': 'Neues Spiel beginnen? Die Rangliste dieses Spiels wird gelöscht.',
+  'druck.ecke': 'Ecke',
 };
 
 const en = {
@@ -679,14 +680,15 @@ const en = {
   'karte.spendierrunde.lang': 'Gives {w} points to a group of your choice (at most what you have).',
   'druck.nurEcken': 'Corners only',
   'druck.nurSchilder': 'Signs only',
-  'druck.hinweis': 'Tip: turn on "Background graphics" in the print dialog to keep the colours. The letters are also easy to read in black and white.',
+  'druck.hinweis': 'Tip: turn on "Background graphics" in the print dialog to keep the colours. The sheets have a 10 mm margin and also work in black and white.',
   'druck.drucken': 'Print',
   'druck.schliessen': 'Close',
   'druck.ecken': 'Corners',
   'druck.eckenHilfe': '{n} sheets A4 landscape: one letter for each corner of the room. True/false questions use corners A and B.',
   'druck.schilder': 'Signs',
-  'druck.schilderHilfe': '{n} sheets A4 portrait: one set of signs per group, to cut out.',
+  'druck.schilderHilfe': '{n} sheets A4 portrait with two signs (A5) each, to cut out, one set per group.',
   'cloche.neuesSpielFrage': 'Start a new game? The ranking of this game will be deleted.',
+  'druck.ecke': 'Corner',
 };
 
 export const TEXTE = { de, en };
