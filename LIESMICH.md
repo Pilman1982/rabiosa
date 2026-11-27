@@ -103,3 +103,15 @@ Die Handys bekommen jeden neuen Stand über eine Live-Verbindung. Auf Handys kan
 Jedes Nachsehen kostet einen Lesezugriff. Bei 25 Handys und einem Spiel von 20 Minuten sind das grob 2000 bis 3000 zusätzliche Lesezugriffe.
 
 Grenzen der Gratis-Stufe: 50 000 Lese- und 20 000 Schreibvorgänge pro Tag (der Tag beginnt um etwa 9 Uhr Schweizer Zeit). Das reicht für ungefähr 10 bis 15 Spiele pro Tag (geschätzt, einschliesslich Wächter). Ist die Grenze erreicht, bleibt ein laufendes Spiel stehen; für den Betrieb an der ganzen Schule ist die Bezahlstufe «Blaze» die sichere Wahl.
+
+## Cloche: Board mit Gruppen
+
+Cloche ist der zweite Spielmodus. Die Klasse spielt in Gruppen vor einem einzigen Bildschirm, ohne Handys. Im Studio öffnet **Als Cloche spielen** ein Quiz als Board (`#/cloche/<Quiz-ID>`); **Live spielen** ist das bisherige Spiel mit Handys. Konzept: `09 Hilfsmittel/Rabiosa/Cloche Konzept.md` im EHL-Ordner.
+
+- **Ablauf:** Vorbereitung (2 bis 8 Gruppen, Überraschungen ein/aus, Druckvorlagen) → Board → die Gruppe am Zug wählt ein Feld → alle Gruppen beantworten die Frage (Ecken im Zimmer oder Schilder) → Lösung zeigen → die Lehrperson hakt ab, wer recht hatte → allenfalls Überraschung für die Gruppe am Zug → nächste Gruppe. Am Ende Siegerehrung.
+- **Punkte:** Jede richtige Gruppe bekommt den Wert des Feldes: Stufe 1 = 100, 2 = 200, 3 = 300, ohne Stufe 100. Kein Tempo-Bonus. Mit «±» lassen sich Punkte von Hand ändern, mit «↶» oder Strg+Z der letzte Schritt zurücknehmen.
+- **Überraschungen** auf etwa jedem fünften Feld: Trinkgeld (+200), Doppelte Portion, Lebensmittelinspektor (−200), Mundraub, Tischwechsel, Spendierrunde. Kein Stand fällt unter 0. Werte und Karten stehen an einer Stelle in `js/logik/cloche.js`.
+- **Thema und Stufe:** Zwei freiwillige Felder pro Frage (`thema`, `stufe`), im Editor unter «Für Cloche», im KI-Prompt beschrieben, vom Import gelesen. Gleiches Thema = eine Spalte im Board (höchstens 8 Spalten). Ohne Themen oder bei mehr als 8 zeigt das Board nummerierte Felder. Mehr als 36 Fragen: Das Board zieht 36 zufällig. Die Datenbank-Regeln brauchen dafür keine Änderung.
+- **Spielstand:** nur im Browser (`localStorage`, Schlüssel `rabiosa-cloche-v1`). Nach dem Laden des Quiz braucht Cloche keine Datenbank mehr; Neuladen setzt das Spiel am gleichen Ort fort (eine offene Frage beginnt mit voller Zeit). Kein Rückblick, kein Export.
+- **Druckvorlagen** (`js/ansicht/cloche-druck.js`): Ecken A bis D (bei Fragen mit 5 oder 6 Antworten bis F) und Richtig/Falsch als A4 quer, pro Gruppe Schilder als A4 hoch zum Ausschneiden. Gedruckt wird über den Browser; «Hintergrundgrafiken» einschalten.
+- **Aufbau:** Regeln ohne Browser testbar in `js/logik/cloche.js` (Tests in `tests/cloche.test.js`), Ansicht in `js/ansicht/cloche.js`, Aussehen im Abschnitt «Cloche» in `css/rabiosa.css`, Texte unter `cloche.*`, `karte.*` und `druck.*` in `js/i18n.js`.
