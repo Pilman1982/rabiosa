@@ -8,13 +8,13 @@ const BEISPIEL_DE = `{
   "fach": "Fach",
   "sprache": "de",
   "fragen": [
-    { "typ": "mc", "text": "Wie heisst die Hauptstadt des Kantons Graubünden?", "zeit": 20,
+    { "typ": "mc", "text": "Wie heisst die Hauptstadt des Kantons Graubünden?", "zeit": 20, "thema": "Graubünden", "stufe": 1,
       "antworten": [ { "text": "Davos" }, { "text": "Chur", "richtig": true }, { "text": "St. Moritz" }, { "text": "Arosa" } ],
       "erklaerung": "Chur ist die Hauptstadt des Kantons Graubünden." },
-    { "typ": "mehrfach", "text": "Welche dieser Orte liegen im Kanton Graubünden?", "zeit": 30,
+    { "typ": "mehrfach", "text": "Welche dieser Orte liegen im Kanton Graubünden?", "zeit": 30, "thema": "Graubünden", "stufe": 2,
       "antworten": [ { "text": "Arosa", "richtig": true }, { "text": "Zermatt" }, { "text": "Davos", "richtig": true }, { "text": "Lugano" } ],
       "erklaerung": "Zermatt liegt im Wallis, Lugano im Tessin." },
-    { "typ": "wf", "text": "Passugg liegt im Kanton Graubünden.", "zeit": 15, "richtig": true,
+    { "typ": "wf", "text": "Passugg liegt im Kanton Graubünden.", "zeit": 15, "richtig": true, "thema": "Graubünden", "stufe": 1,
       "erklaerung": "Passugg gehört zur Gemeinde Churwalden im Kanton Graubünden." },
     { "typ": "schaetz", "text": "Wie viele Kantone hat die Schweiz?", "zeit": 20, "wert": 26, "toleranz": 2, "einheit": "",
       "erklaerung": "Die Schweiz hat 26 Kantone." },
@@ -33,13 +33,13 @@ const BEISPIEL_EN = `{
   "fach": "Subject",
   "sprache": "en",
   "fragen": [
-    { "typ": "mc", "text": "What is the capital of the canton of Graubünden?", "zeit": 20,
+    { "typ": "mc", "text": "What is the capital of the canton of Graubünden?", "zeit": 20, "thema": "Graubünden", "stufe": 1,
       "antworten": [ { "text": "Davos" }, { "text": "Chur", "richtig": true }, { "text": "St. Moritz" }, { "text": "Arosa" } ],
       "erklaerung": "Chur is the capital of the canton of Graubünden." },
-    { "typ": "mehrfach", "text": "Which of these places are in the canton of Graubünden?", "zeit": 30,
+    { "typ": "mehrfach", "text": "Which of these places are in the canton of Graubünden?", "zeit": 30, "thema": "Graubünden", "stufe": 2,
       "antworten": [ { "text": "Arosa", "richtig": true }, { "text": "Zermatt" }, { "text": "Davos", "richtig": true }, { "text": "Lugano" } ],
       "erklaerung": "Zermatt is in Valais, Lugano in Ticino." },
-    { "typ": "wf", "text": "Passugg is in the canton of Graubünden.", "zeit": 15, "richtig": true,
+    { "typ": "wf", "text": "Passugg is in the canton of Graubünden.", "zeit": 15, "richtig": true, "thema": "Graubünden", "stufe": 1,
       "erklaerung": "Passugg belongs to the municipality of Churwalden in Graubünden." },
     { "typ": "schaetz", "text": "How many cantons does Switzerland have?", "zeit": 20, "wert": 26, "toleranz": 2, "einheit": "",
       "erklaerung": "Switzerland has 26 cantons." },
@@ -86,6 +86,7 @@ REGELN
 - "erklaerung" ist ein Satz, der bei der Auflösung erscheint: warum die Antwort stimmt. Sie gehört zu jeder Frage ausser zur Umfrage.
 - "fach" ist nur das Fach, ohne Klasse.
 - Schweizer Rechtschreibung (ss statt ß).
+- "thema" und "stufe" sind freiwillig und dienen dem Spielmodus Cloche (Gruppen spielen auf einem Board mit verdeckten Feldern). Für Cloche haben die Fragen 4 bis 8 Themen mit je 3 Fragen. "thema" ist ein kurzer Name (höchstens 40 Zeichen), "stufe" ist 1, 2 oder 3: 1 = Wissen, 2 = Verstehen, 3 = Anwenden an einem Fall. Am besten eignen sich für Cloche "mc" mit 4 Antworten und "wf".
 
 AUSGABE
 Gib nur einen einzigen JSON-Block aus (als Codeblock), ohne Text davor oder danach, genau in der Form des Beispiels. Die Feldnamen bleiben, wie sie sind. Das Beispiel zeigt nur die Form; übernimm seinen Inhalt nicht.
@@ -124,6 +125,7 @@ RULES
 - "erklaerung" is one sentence shown with the result: why the answer is right. Every question except the poll has one.
 - "fach" is the subject only, without the class.
 - "text" is the question, "antworten" are the answers, "richtig" marks a correct answer.
+- "thema" (topic) and "stufe" (level) are optional and serve the Cloche game mode (groups play on a board of covered tiles). For Cloche the questions have 4 to 8 topics with 3 questions each. "thema" is a short name (at most 40 characters), "stufe" is 1, 2 or 3: 1 = knowledge, 2 = understanding, 3 = applying it to a case. Cloche works best with "mc" with 4 answers and "wf".
 
 OUTPUT
 Return a single JSON block only (as a code block), with no text before or after it, in exactly the form of the example. Keep the field names as they are. The example only shows the form; do not reuse its content.

@@ -102,3 +102,6 @@ export function clocheFelder(frage) {
   const n = Number(frage?.stufe);
   return { thema, stufe: n === 1 || n === 2 || n === 3 ? n : null };
 }
+
+/** Für Cloche mit Ecken: Hat eine Auswahlfrage mehr als 4 Antworten, reichen vier Ecken nicht. */
+export const zuVieleFuerEcken = quiz => (quiz.fragen || []).some(f => (f.typ === 'mc' || f.typ === 'mehrfach') && (f.antworten || []).length > 4);

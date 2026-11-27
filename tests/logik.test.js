@@ -194,3 +194,16 @@ test('leseZahl versteht negative Zahlen, auch mit typografischem Minus', () => {
   assert.equal(leseZahl('−18,5'), -18.5);
   assert.equal(leseZahl('– 4'), -4);
 });
+
+test('zuVieleFuerEcken: wahr, sobald eine Auswahlfrage mehr als 4 Antworten hat', async () => {
+  const { zuVieleFuerEcken } = await import('../js/logik/quiz.js');
+  const mit = n => ({ fragen: [{ typ: 'mc', antworten: Array.from({ length: n }, (_, i) => ({ text: 'x' + i, richtig: i === 0 })) }] });
+  assert.equal(zuVieleFuerEcken(mit(5)), true);
+  assert.equal(zuVieleFuerEcken(mit(4)), false);
+  assert.equal(zuVieleFuerEcken({ fragen: [{ typ: 'umfrage', antworten: Array.from({ length: 6 }, () => ({ text: 'u' })) }] }), false);
+});
+
+test('quizFehler: Thema und Stufe erzeugen keine Mängel', () => {
+  const q = { titel: 'T', fragen: [{ ...neueFrage('wf'), text: 'A', thema: 'X', stufe: 3 }, { ...neueFrage('wf'), text: 'B' }] };
+  assert.deepEqual(quizFehler(q), []);
+});

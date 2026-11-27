@@ -1,7 +1,7 @@
 // Quiz-Editor: Fragen erfassen, ordnen und laufend speichern.
 import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN } from '../ui.js';
 import { t } from '../i18n.js';
-import { TYPEN, ZEIT_WAHL, neueFrage, quizFehler, zufallsId } from '../logik/quiz.js';
+import { TYPEN, ZEIT_WAHL, neueFrage, quizFehler, zufallsId, clocheFelder, zuVieleFuerEcken, THEMA_MAX } from '../logik/quiz.js';
 import { leseZahl } from '../logik/pruefen.js';
 
 const BILD_MAX_ZEICHEN = 900000;   // als Text gespeichert; entspricht rund 675 KB
@@ -63,7 +63,8 @@ export function zeige(wurzel, ctx, quizId) {
     const fehler = quizFehler(quiz);
     maengelEl.replaceChildren(fehler.length
       ? h('div', { class: 'maengel' }, h('b', null, T('editor.maengel')), h('ul', null, fehler.map(f => h('li', null, T('mangel.' + f.code, { nr: (f.frage ?? 0) + 1 })))))
-      : h('p', { class: 'spielbar' }, '✓ ' + T('editor.spielbar')));
+      : h('p', { class: 'spielbar' }, '✓ ' + T('editor.spielbar')),
+      zuVieleFuerEcken(quiz) ? h('p', { class: 'hilfe' }, T('editor.eckenHinweis')) : null);
   }
 
   function zeichneListe() {
@@ -193,7 +194,26 @@ export function zeige(wurzel, ctx, quizId) {
       typFelder(f),
       block(T('editor.zeit'), h('div', { class: 'chips' },
         ZEIT_WAHL.map(z => h('button', { type: 'button', class: 'chip' + (f.zeit === z ? ' an' : ''), onclick: () => { f.zeit = z; neu(); } }, T('editor.sekunden', { n: z }))), zeitFeld)),
-      block(T('editor.erklaerung'), textfeld(f.erklaerung, v => { f.erklaerung = v; }, { maxlength: '400', rows: '2' })));
+      block(T('editor.erklaerung'), textfeld(f.erklaerung, v => { f.erklaerung = v; }, { maxlength: '400', rows: '2' })),
+      clocheBlock(f));
+  }
+
+  /** Thema und Stufe für Cloche (freiwillig; für das Live-Spiel ohne Bedeutung). */
+  function clocheBlock(f) {
+    const themen = [...new Set(quiz.fragen.map(x => clocheFelder(x).thema).filter(Boolean))];
+    const setzeThema = v => { const th = v.trim().slice(0, THEMA_MAX); if (th) f.thema = th; else delete f.thema; };
+    const stufe = clocheFelder(f).stufe;
+    const setzeStufe = n => { if (n) f.stufe = n; else delete f.stufe; neu(); };
+    return h('div', { class: 'ed-cloche' },
+      h('p', { class: 'lab' }, T('editor.clocheTitel')),
+      h('div', { class: 'ed-cloche-felder' },
+        block(T('editor.thema'),
+          eingabe(f.thema, setzeThema, { maxlength: String(THEMA_MAX), list: 'themen-vorschlaege', autocomplete: 'off', placeholder: T('editor.themaBeispiel') }),
+          h('datalist', { id: 'themen-vorschlaege' }, themen.map(th => h('option', { value: th })))),
+        block(T('editor.stufe'), h('div', { class: 'chips' },
+          [null, 1, 2, 3].map(n => h('button', { type: 'button', class: 'chip' + (stufe === n ? ' an' : ''), onclick: () => setzeStufe(n) },
+            n ? T('editor.stufeN', { n, p: n * 100 }) : '–'))))),
+      h('p', { class: 'hilfe' }, T('editor.clocheHilfe')));
   }
 
   /** Ordner, die schon jemand benutzt (das Studio merkt sie sich beim Laden der Listen). */

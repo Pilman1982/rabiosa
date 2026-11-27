@@ -178,3 +178,24 @@ test('Prompt: verbietet Prüfungsfragen und verlangt reines JSON', () => {
   assert.match(importPrompt('en'), /exam/i);
   assert.match(importPrompt('en'), /never/i);
 });
+
+test('Cloche: Thema und Stufe werden gelesen, auch unter englischen Namen', () => {
+  const { quiz } = importiereQuiz(JSON.stringify({ titel: 'T', fragen: [
+    { typ: 'wf', text: 'A', richtig: true, thema: ' Lagerung ', stufe: 2 },
+    { typ: 'wf', text: 'B', richtig: true, topic: 'HACCP', level: '3' },
+    { typ: 'wf', text: 'C', richtig: true, kategorie: 'LMG', schwierigkeit: 1 },
+    { typ: 'wf', text: 'D', richtig: true, category: 'Allergene', difficulty: 5 },
+    { typ: 'wf', text: 'E', richtig: true },
+  ] }));
+  assert.deepEqual(quiz.fragen.map(f => [f.thema, f.stufe]), [['Lagerung', 2], ['HACCP', 3], ['LMG', 1], ['Allergene', undefined], [undefined, undefined]]);
+  assert.ok(!('stufe' in quiz.fragen[3]), 'ungültige Stufe fehlt ganz');
+  assert.deepEqual(quizFehler(quiz), []);
+});
+
+test('Prompt: das Beispiel zeigt Thema und Stufe für Cloche', () => {
+  for (const sprache of ['de', 'en']) {
+    const { quiz } = importiereQuiz(importPrompt(sprache));
+    assert.ok(quiz.fragen.some(f => f.thema && f.stufe), `${sprache}: Beispiel ohne Thema und Stufe`);
+    assert.match(importPrompt(sprache), /Cloche/);
+  }
+});

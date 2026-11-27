@@ -3,7 +3,7 @@
 // Grosszügig beim Lesen: Text um das JSON herum, Code-Zäune, englische Feldnamen, Antworten als blosse Texte.
 // Streng beim Ergebnis: Es entsteht immer ein sauberes, eigenes Quiz; was fehlt, zeigt danach der Editor.
 
-import { zufallsId, ZEIT_MIN, ZEIT_MAX } from './quiz.js';
+import { zufallsId, ZEIT_MIN, ZEIT_MAX, clocheFelder } from './quiz.js';
 import { leseZahl } from './pruefen.js';
 
 export const MAX_FRAGEN = 100;
@@ -124,6 +124,10 @@ function frage(f) {
   }
   if (typ === 'reihe') neu.elemente = texte(feld(f, 'elemente', 'items', 'reihenfolge', 'order'), 200);
   if (typ === 'kurz') neu.loesungen = texte(feld(f, 'loesungen', 'lösungen', 'solutions', 'answers', 'antworten'), 60);
+  // Für Cloche: Thema (Spalte) und Stufe (1 bis 3), beide freiwillig; Ungültiges fällt weg.
+  const cloche = clocheFelder({ thema: text(feld(f, 'thema', 'topic', 'kategorie', 'category'), 60), stufe: feld(f, 'stufe', 'level', 'schwierigkeit', 'difficulty') });
+  if (cloche.thema) neu.thema = cloche.thema;
+  if (cloche.stufe) neu.stufe = cloche.stufe;
   return neu;
 }
 
