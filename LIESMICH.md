@@ -72,7 +72,8 @@ Rabiosa gibt es zweimal mit demselben Programm:
 
 - Welche Fassung läuft, sagt die Seite selbst: `student/index.html` trägt `<html data-variante="student">` und lädt dasselbe Programm aus `../js/`. `js/variante.js` liest das Kennzeichen. Ein Test hält die beiden `index.html` gleich.
 - Getrennt sind die Fassungen durch das Firebase-Projekt: eigene Konten, eigener Einladungscode, eigene Quiz, eigener Raum für Freigaben, eigenes Tageslimit. Kein Konto der einen Fassung kann Daten der anderen lesen.
-- Solange `FIREBASE_STUDENT` auf `null` steht, läuft die Student-Fassung im Demo-Modus.
+- Eingerichtet am 27.11.2026: Projekt «Rabiosa Student» (`rabiosa-student`), Gratis-Stufe, Datenbank in Zürich, ohne Analytics und ohne Gemini, Anmeldung mit E-Mail und Passwort, Domain `pilman1982.github.io` autorisiert, Regeln aus `firestore.rules` veröffentlicht. Stünde `FIREBASE_STUDENT` auf `null`, liefe die Student-Fassung im Demo-Modus.
+- Ändert sich `firestore.rules`, muss der neue Stand in **beiden** Projekten veröffentlicht werden.
 - Was in der Student-Fassung anders heisst (zum Beispiel «Mitstudierende» statt «Kollegium»), steht in `TEXTE_STUDENT` in `js/i18n.js`. Alles Übrige ist gleich.
 - Administrator der Student-Fassung ist, wem das Firebase-Projekt gehört: Einladungscode festlegen, Konten sperren und Quiz löschen geschieht in der Firebase-Konsole (siehe unten). Im Programm selbst gibt es keine Administrator-Rolle.
 

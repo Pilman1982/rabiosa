@@ -12,5 +12,13 @@ export const FIREBASE = {
 };
 
 // Dasselbe für die Student-Fassung (Ordner student/): ein eigenes Firebase-Projekt mit eigenen Konten und Daten.
-// Solange hier null steht, läuft die Student-Fassung im Demo-Modus. Einrichten: siehe LIESMICH.md.
-export const FIREBASE_STUDENT = null;
+// Projekt «Rabiosa Student» (rabiosa-student, Datenbank in Zürich), eingerichtet am 27.11.2026.
+// Stünde hier null, liefe die Student-Fassung im Demo-Modus. Einrichten: siehe LIESMICH.md.
+export const FIREBASE_STUDENT = {
+  apiKey: 'AIzaSyBjrt4Vb_qfjftCY2ux8TsClHd5hl_r8u0',
+  authDomain: 'rabiosa-student.firebaseapp.com',
+  projectId: 'rabiosa-student',
+  storageBucket: 'rabiosa-student.firebasestorage.app',
+  messagingSenderId: '981897662759',
+  appId: '1:981897662759:web:0b6ae7560be29fbaf35902',
+};
