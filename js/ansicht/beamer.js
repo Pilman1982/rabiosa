@@ -1,5 +1,5 @@
 // Beamer und Spielleitung: läuft auf dem Laptop der Lehrperson. Sie ist der Schiedsrichter des Spiels.
-import { h, svg, avatar, fluss, logo, rueckfrage, meldung, fehlerText, BUCHSTABEN } from '../ui.js';
+import { h, svg, avatar, fluss, logo, marke, rueckfrage, meldung, fehlerText, BUCHSTABEN } from '../ui.js';
 import { t, zahl } from '../i18n.js';
 import { qrSvg } from '../qr.js';
 import ton from '../ton.js';
@@ -179,7 +179,7 @@ export function zeige(wurzel, ctx, code) {
     return buehne('b-navy',
       h('div', { class: 'lobby' },
         h('div', { class: 'links' },
-          h('div', { class: 'marke' }, 'RABIOSA'),
+          h('div', { class: 'marke' }, marke()),
           h('div', { class: 'unter' }, T('marke.unter')),
           h('div', { class: 'qr' }, qrKnoten),
           h('div', { class: 'code-l' }, T('beamer.code')),
@@ -286,7 +286,7 @@ export function zeige(wurzel, ctx, code) {
 
   function hinweisSeite(text) {
     primaer = null;
-    return buehne('b-navy', h('div', { class: 'vorlauf' }, h('div', { class: 'marke' }, 'RABIOSA'), h('p', { class: 'bereit' }, text),
+    return buehne('b-navy', h('div', { class: 'vorlauf' }, h('div', { class: 'marke' }, marke()), h('p', { class: 'bereit' }, text),
       h('a', { class: 'start statisch', href: '#/studio' }, T('rueckblick.studio'))), logo(sprache(), 'weiss'));
   }
 

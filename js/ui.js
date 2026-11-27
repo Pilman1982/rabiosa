@@ -1,6 +1,7 @@
 // Kleine Helfer für die Ansichten. Fremde Texte (Namen, Antworten) gehen immer als Textknoten ins Dokument.
 import { t } from './i18n.js';
 import { avatarSvg } from './avatar.js';
+import { ZUSATZ } from './variante.js';
 
 /** Baut ein Element. kinder: Text, Knoten, Listen; null/false wird übersprungen. */
 export function h(tag, eigenschaften, ...kinder) {
@@ -43,9 +44,13 @@ export function fluss(farbe = '#B6633F', dicke = 2) {
   return svg(`<svg class="fluss" viewBox="0 0 1200 36" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18 C100 2 200 34 300 18 S500 2 600 18 S800 34 900 18 S1100 2 1200 18" fill="none" stroke="${farbe}" stroke-width="${dicke}" vector-effect="non-scaling-stroke"/></svg>`);
 }
 
+/** Der Name, in der Student-Fassung mit dem Zusatz «Student». */
+export const marke = () => ['RABIOSA', ZUSATZ ? h('span', { class: 'zusatz' }, ZUSATZ) : null];
+
 export function logo(sprache, farbe = 'weiss') {
   const s = sprache === 'en' ? 'en' : 'de';
-  return h('img', { class: 'logo', src: `bilder/ehl-${s}-${farbe}.svg`, alt: s === 'en' ? 'EHL Hotel School Passugg' : 'EHL Hotelfachschule Passugg' });
+  // Vom Ort des Programms aus, nicht von der Seite: Die Student-Fassung liegt eine Ebene tiefer.
+  return h('img', { class: 'logo', src: new URL(`../bilder/ehl-${s}-${farbe}.svg`, import.meta.url).href, alt: s === 'en' ? 'EHL Hotel School Passugg' : 'EHL Hotelfachschule Passugg' });
 }
 
 /** Rückfrage als Fenster. Ergebnis: true = bestätigt. */

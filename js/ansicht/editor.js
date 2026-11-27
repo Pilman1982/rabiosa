@@ -1,5 +1,5 @@
 // Quiz-Editor: Fragen erfassen, ordnen und laufend speichern.
-import { h, meldung, fehlerText, rueckfrage, BUCHSTABEN } from '../ui.js';
+import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN } from '../ui.js';
 import { t } from '../i18n.js';
 import { TYPEN, ZEIT_WAHL, neueFrage, quizFehler, zufallsId } from '../logik/quiz.js';
 import { leseZahl } from '../logik/pruefen.js';
@@ -196,6 +196,12 @@ export function zeige(wurzel, ctx, quizId) {
       block(T('editor.erklaerung'), textfeld(f.erklaerung, v => { f.erklaerung = v; }, { maxlength: '400', rows: '2' })));
   }
 
+  /** Ordner, die schon jemand benutzt (das Studio merkt sie sich beim Laden der Listen). */
+  function bekannteOrdner() {
+    try { const liste = JSON.parse(sessionStorage.getItem('rabiosa-ordner') || '[]'); return Array.isArray(liste) ? liste.filter(o => typeof o === 'string').slice(0, 200) : []; }
+    catch { return []; }
+  }
+
   function zeichneAlles() {
     const sprachwahl = h('select', { class: 'feld' }, h('option', { value: 'de' }, T('editor.deutsch')), h('option', { value: 'en' }, T('editor.englisch')));
     sprachwahl.value = quiz.sprache || 'de';
@@ -204,11 +210,15 @@ export function zeige(wurzel, ctx, quizId) {
     titel.addEventListener('input', () => { quiz.titel = titel.value; geaendert(); });
     wurzel.replaceChildren(h('div', { class: 'studio editor' },
       h('header', { class: 'studiokopf' },
-        h('a', { class: 'marke-klein', href: '#/studio' }, 'RABIOSA'), titel, standEl,
+        h('a', { class: 'marke-klein', href: '#/studio' }, marke()), titel, standEl,
         h('button', { class: 'knopf klein', onclick: async () => { if (await speichere()) ctx.geh('#/studio'); } }, T('editor.fertig'))),
       h('div', { class: 'ed-meta' },
         h('label', null, h('span', { class: 'lab' }, T('editor.fach')), eingabe(quiz.fach, v => { quiz.fach = v; }, { maxlength: '40' })),
+        h('label', null, h('span', { class: 'lab' }, T('editor.ordner')),
+          eingabe(quiz.ordner, v => { quiz.ordner = v; }, { maxlength: '80', placeholder: T('editor.ordnerBeispiel'), list: 'ordner-vorschlaege', autocomplete: 'off' })),
+        h('datalist', { id: 'ordner-vorschlaege' }, bekannteOrdner().map(o => h('option', { value: o }))),
         h('label', null, h('span', { class: 'lab' }, T('editor.sprache')), sprachwahl)),
+      h('p', { class: 'hilfe' }, T('editor.ordnerHilfe')),
       maengelEl,
       h('div', { class: 'ed-spalten' }, listeEl, frageEl)));
     zeichneMaengel();

@@ -287,6 +287,23 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
 .schalter { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .schalter input { width: 18px; height: 18px; accent-color: var(--petrol); }
 .leer { color: var(--text-leise); padding: 30px 0; }
+/* Freigaben: Suche, Weg durch die Ordner, Ordner */
+.suchzeile { margin-bottom: 18px; }
+.suchfeld { max-width: 560px; font-weight: 400; }
+.brotkrumen { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 16px; font-size: 14.5px; color: var(--text-leise); }
+.krume { border: 0; background: transparent; padding: 2px 0; color: var(--petrol); text-decoration: underline; font-size: inherit; }
+.brotkrumen [aria-current] { color: var(--navy); font-weight: 600; }
+.ordnerliste { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.ordner { display: flex; align-items: center; gap: 12px; text-align: left; border: 1.5px solid var(--linie); background: #fff; border-radius: 14px; padding: 13px 16px; font-weight: 600; color: var(--navy); }
+.ordner:hover, .ordner:focus-visible { border-color: var(--kupfer); }
+.ordnerbild { width: 24px; height: 24px; color: var(--kupfer); flex: none; }
+.ordnername { flex: 1; overflow-wrap: anywhere; }
+.ordnerzahl { font-size: 12.5px; color: var(--text-leise); background: var(--papier); border-radius: 99px; padding: 2px 9px; }
+.trefferzahl { font-size: 13.5px; color: var(--text-leise); margin: 0 0 12px; }
+.karte .ablageort { font-size: 12.5px; color: var(--kupfer-dunkel); margin: 0; overflow-wrap: anywhere; }
+/* Zusatz «Student» neben dem Namen (Student-Fassung) */
+.zusatz { display: inline-block; margin-left: .6em; font-family: var(--sans); font-size: max(.34em, 10px); font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--kupfer); vertical-align: middle; }
+.h-kopf .zusatz, .lobby .zusatz, .vorlauf .zusatz, .startseite .zusatz { color: #d8a889; }
 .anmeldung { min-height: 100dvh; display: grid; place-items: center; padding: 22px; background: radial-gradient(120% 80% at 20% 0%, #0d2550 0%, var(--navy) 60%); }
 .anmeldekarte { background: var(--papier); border-radius: 20px; padding: 30px 28px; width: min(420px, 100%); box-shadow: 0 20px 60px #0006; }
 .anmeldekarte .marke-klein { font-size: 30px; display: block; }

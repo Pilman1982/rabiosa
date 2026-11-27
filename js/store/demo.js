@@ -2,10 +2,9 @@
 // Dient zum Ausprobieren und Testen ohne Firebase. Einladungscode im Demo-Modus: «demo».
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
 
-const P = 'rabiosa-demo:';
-
-export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, jetzt = Date.now } = {}) {
-  if (kanal === undefined && typeof BroadcastChannel !== 'undefined') kanal = new BroadcastChannel('rabiosa-demo');
+export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, jetzt = Date.now, name = 'rabiosa-demo' } = {}) {
+  const P = name + ':';
+  if (kanal === undefined && typeof BroadcastChannel !== 'undefined') kanal = new BroadcastChannel(name);
 
   const lies = (k, sonst = null) => { const v = speicher.getItem(P + k); return v === null ? sonst : JSON.parse(v); };
   const schreib = (k, v) => speicher.setItem(P + k, JSON.stringify(v));

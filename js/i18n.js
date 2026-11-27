@@ -1,4 +1,6 @@
 // Alle sichtbaren Texte, deutsch (Schweizer Rechtschreibung) und englisch.
+import { IST_STUDENT } from './variante.js';
+
 export const SPRACHEN = ['de', 'en'];
 
 const de = {
@@ -194,6 +196,10 @@ const de = {
   'studio.freischalten': 'Freischalten',
   'studio.rueckblicke': 'Rückblicke',
   'studio.ohneFach': 'Ohne Fach',
+  'studio.suchen': 'Suchen: Titel, Fach, Ordner, Person oder Stichwort',
+  'studio.treffer': 'Treffer: {n}',
+  'studio.keineTreffer': 'Nichts gefunden.',
+  'studio.ablage': 'Ablage',
   'studio.fortsetzen': 'Laufendes Spiel {code} fortsetzen',
   'studio.demoCode': 'Der Einladungscode im Demo-Modus lautet «demo».',
 
@@ -214,6 +220,9 @@ const de = {
   'editor.titel': 'Titel',
   'editor.unbenannt': 'Unbenanntes Quiz',
   'editor.fach': 'Fach',
+  'editor.ordner': 'Ordner',
+  'editor.ordnerBeispiel': 'z. B. HS26/Final',
+  'editor.ordnerHilfe': 'Fach und Ordner bestimmen, wo das Quiz nach der Freigabe liegt. Unterordner mit / abtrennen.',
   'editor.sprache': 'Sprache',
   'editor.deutsch': 'Deutsch',
   'editor.englisch': 'Englisch',
@@ -459,6 +468,10 @@ const en = {
   'studio.freischalten': 'Activate',
   'studio.rueckblicke': 'Reviews',
   'studio.ohneFach': 'No subject',
+  'studio.suchen': 'Search: title, subject, folder, person or keyword',
+  'studio.treffer': 'Results: {n}',
+  'studio.keineTreffer': 'Nothing found.',
+  'studio.ablage': 'Folders',
   'studio.fortsetzen': 'Resume running game {code}',
   'studio.demoCode': 'The invitation code in demo mode is “demo”.',
 
@@ -479,6 +492,9 @@ const en = {
   'editor.titel': 'Title',
   'editor.unbenannt': 'Untitled quiz',
   'editor.fach': 'Subject',
+  'editor.ordner': 'Folder',
+  'editor.ordnerBeispiel': 'e.g. HS26/Final',
+  'editor.ordnerHilfe': 'Subject and folder decide where the quiz sits once it is shared. Separate subfolders with /.',
   'editor.sprache': 'Language',
   'editor.deutsch': 'German',
   'editor.englisch': 'English',
@@ -533,10 +549,26 @@ const en = {
 
 export const TEXTE = { de, en };
 
+/** Was in der Student-Fassung anders heisst. Alles Übrige gilt wie oben. */
+export const TEXTE_STUDENT = {
+  de: {
+    'start.dozierende': 'Für Studierende',
+    'studio.codeHilfe': 'Den Code bekommst du von deiner Lehrperson.',
+    'studio.kollegium': 'Mitstudierende',
+    'studio.freigeben': 'Für Mitstudierende freigeben',
+  },
+  en: {
+    'start.dozierende': 'For students',
+    'studio.codeHilfe': 'You get the code from your lecturer.',
+    'studio.kollegium': 'Fellow students',
+    'studio.freigeben': 'Share with fellow students',
+  },
+};
+
 /** Text in der gewünschten Sprache; {platzhalter} werden ersetzt. Unbekannte Sprache = Deutsch. */
-export function t(sprache, schluessel, werte = {}) {
-  const tabelle = TEXTE[sprache] || TEXTE.de;
-  const text = tabelle[schluessel] ?? TEXTE.de[schluessel];
+export function t(sprache, schluessel, werte = {}, student = IST_STUDENT) {
+  const s = sprache in TEXTE ? sprache : 'de';
+  const text = (student ? TEXTE_STUDENT[s][schluessel] : undefined) ?? TEXTE[s][schluessel] ?? TEXTE.de[schluessel];
   if (text === undefined) return schluessel;
   return text.replace(/\{(\w+)\}/g, (_, k) => (k in werte ? String(werte[k]) : '{' + k + '}'));
 }

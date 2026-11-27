@@ -1,5 +1,5 @@
 // Rückblick: zu jeder Frage die Lösung und wie die Klasse geantwortet hat. Ohne Namen.
-import { h, BUCHSTABEN, fehlerText, datum } from '../ui.js';
+import { h, marke, BUCHSTABEN, fehlerText, datum } from '../ui.js';
 import { t } from '../i18n.js';
 
 /**
@@ -84,7 +84,7 @@ export function zeige(wurzel, ctx, quizId) {
   const s = ctx.sprache;
   const inhalt = h('div', { class: 'rb-liste' }, h('p', null, t(s, 'allg.laedt')));
   wurzel.replaceChildren(h('div', { class: 'studio' },
-    h('header', { class: 'studiokopf' }, h('a', { class: 'marke-klein', href: '#/studio' }, 'RABIOSA'), h('h1', null, t(s, 'studio.rueckblicke')),
+    h('header', { class: 'studiokopf' }, h('a', { class: 'marke-klein', href: '#/studio' }, marke()), h('h1', null, t(s, 'studio.rueckblicke')),
       h('a', { class: 'knopf leise klein', href: '#/studio' }, t(s, 'rueckblick.studio'))),
     inhalt));
   const stopp = store.konto.beobachten(async konto => {

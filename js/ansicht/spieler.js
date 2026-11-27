@@ -1,5 +1,5 @@
 // Handy der Studierenden: beitreten, Avatar bauen, antworten, Rückmeldung sehen.
-import { h, avatar, BUCHSTABEN } from '../ui.js';
+import { h, avatar, marke, BUCHSTABEN } from '../ui.js';
 import { t, zahl } from '../i18n.js';
 import { BERUFE, FRISUREN, HAARFARBEN, HAUTTOENE, GESCHLECHTER, zufallsAvatar, saubererAvatar } from '../avatar.js';
 import { leseZahl } from '../logik/pruefen.js';
@@ -57,7 +57,7 @@ export function zeige(wurzel, ctx, code) {
   };
 
   // ---------- Bausteine ----------
-  const kopf = rechts => h('header', { class: 'h-kopf' }, h('b', null, 'RABIOSA'), h('span', null, rechts));
+  const kopf = rechts => h('header', { class: 'h-kopf' }, h('b', null, marke()), h('span', null, rechts));
   const codeText = code.slice(0, 3) + ' ' + code.slice(3);
   const seite = (rechts, ...inhalt) => h('div', { class: 'handy' }, kopf(rechts), h('div', { class: 'h-in' }, inhalt));
 

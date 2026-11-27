@@ -10,3 +10,7 @@ export const FIREBASE = {
   messagingSenderId: '383025752576',
   appId: '1:383025752576:web:1bffb4301d4e42a31cc6e5',
 };
+
+// Dasselbe für die Student-Fassung (Ordner student/): ein eigenes Firebase-Projekt mit eigenen Konten und Daten.
+// Solange hier null steht, läuft die Student-Fassung im Demo-Modus. Einrichten: siehe LIESMICH.md.
+export const FIREBASE_STUDENT = null;

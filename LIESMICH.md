@@ -61,6 +61,30 @@ Eingerichtet am 25.11.2026: Projekt «Rabiosa» (`rabiosa-fb63b`), Gratis-Stufe,
 Einladungscode ändern: Feld `code` in Schritt 5 überschreiben. Bestehende Konten bleiben freigeschaltet.
 Konto sperren: in **Authentication** das Konto deaktivieren und in **Firestore > Daten > dozierende** das Dokument mit seiner Kennung löschen.
 
+## Zwei Fassungen: Dozierende und Studierende
+
+Rabiosa gibt es zweimal mit demselben Programm:
+
+| | Adresse | Firebase-Projekt |
+|---|---|---|
+| Dozierende | `https://pilman1982.github.io/rabiosa/` | `FIREBASE` in `js/config.js` |
+| Studierende («Rabiosa Student») | `https://pilman1982.github.io/rabiosa/student/` | `FIREBASE_STUDENT` in `js/config.js` |
+
+- Welche Fassung läuft, sagt die Seite selbst: `student/index.html` trägt `<html data-variante="student">` und lädt dasselbe Programm aus `../js/`. `js/variante.js` liest das Kennzeichen. Ein Test hält die beiden `index.html` gleich.
+- Getrennt sind die Fassungen durch das Firebase-Projekt: eigene Konten, eigener Einladungscode, eigene Quiz, eigener Raum für Freigaben, eigenes Tageslimit. Kein Konto der einen Fassung kann Daten der anderen lesen.
+- Solange `FIREBASE_STUDENT` auf `null` steht, läuft die Student-Fassung im Demo-Modus.
+- Was in der Student-Fassung anders heisst (zum Beispiel «Mitstudierende» statt «Kollegium»), steht in `TEXTE_STUDENT` in `js/i18n.js`. Alles Übrige ist gleich.
+- Administrator der Student-Fassung ist, wem das Firebase-Projekt gehört: Einladungscode festlegen, Konten sperren und Quiz löschen geschieht in der Firebase-Konsole (siehe unten). Im Programm selbst gibt es keine Administrator-Rolle.
+
+Student-Fassung einrichten: die Schritte 1 bis 5 unter «Firebase einrichten» mit einem zweiten Projekt wiederholen (dieselbe Datei `firestore.rules`), die Angaben der Web-App bei `FIREBASE_STUDENT` eintragen. Die Sammlung der Profile heisst auch dort `dozierende`.
+
+## Ablage der Freigaben: Ordner und Suche
+
+- Im Editor hat jedes Quiz neben dem Fach ein Feld **Ordner** (zum Beispiel `HS26/Final`, Unterordner mit `/`, höchstens vier Stufen). Das Feld schlägt Ordner vor, die schon jemand benutzt.
+- Im Reiter «Kollegium» liegen die Freigaben in Ordnern: zuoberst die Fächer, darunter die Ordner. Schreibweisen fallen zusammen (Gross/Klein, Akzente).
+- Die Suche geht über alle Freigaben: Titel, Fach, Ordner, Name der Person, dazu Fragen und Antworten. Mehrere Wörter müssen alle vorkommen.
+- Die Logik steht in `js/logik/ablage.js`. Die Ordner sind nur ein Textfeld im Quiz (`ordner`); die Regeln in Firestore brauchen dafür keine Änderung.
+
 ## Quiz mit einer KI erstellen und importieren
 
 Im Studio öffnet **Quiz importieren** ein Fenster mit drei Schritten: Prompt kopieren, in eine KI einfügen (mit einem Thema, Unterlagen, einer Prüfung oder einem bestehenden Quiz), die Antwort der KI einfügen oder als Datei wählen. Rabiosa liest das Quiz ein, speichert es und öffnet es im Editor zum Durchlesen.

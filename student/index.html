@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="de-CH" data-variante="student">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rabiosa Student</title>
+  <meta name="description" content="Rabiosa – das Live-Quiz der EHL Passugg">
+  <meta name="theme-color" content="#001436">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../bilder/zeichen.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/rabiosa.css?v=4">
+  <!-- Verbindungen und das Firebase-SDK schon holen, während die Seite ihre eigenen Module lädt.
+       Die Version muss zu FIREBASE_VERSION in js/store/firebase.js passen (ein Test prüft das). -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js" crossorigin>
+</head>
+<body>
+  <main id="app"></main>
+  <noscript>Rabiosa braucht JavaScript. / Rabiosa needs JavaScript.</noscript>
+  <script type="module" src="../js/main.js?v=2"></script>
+</body>
+</html>

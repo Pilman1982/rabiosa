@@ -1,5 +1,5 @@
 // Startseite: Spielcode eintippen (für alle, die den QR-Code nicht scannen) und Weg ins Studio.
-import { h, fluss, logo } from '../ui.js';
+import { h, fluss, logo, marke } from '../ui.js';
 import { t } from '../i18n.js';
 
 export function zeige(wurzel, ctx) {
@@ -18,7 +18,7 @@ export function zeige(wurzel, ctx) {
     const sprachKnopf = k => h('button', { class: 'sprachknopf' + (s === k ? ' an' : ''), onclick: () => { ctx.sprache = k; zeichne(); } }, k.toUpperCase());
     wurzel.replaceChildren(h('div', { class: 'startseite' },
       h('div', { class: 'sprachwahl' }, sprachKnopf('de'), sprachKnopf('en')),
-      h('h1', { class: 'marke' }, 'RABIOSA'),
+      h('h1', { class: 'marke' }, marke()),
       h('p', { class: 'unter' }, t(s, 'marke.unter')),
       fluss(),
       h('form', { class: 'codeform', onsubmit: los },

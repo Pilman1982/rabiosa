@@ -1,6 +1,7 @@
 rules_version = '2';
 
 // Rabiosa – Sicherheitsregeln für Cloud Firestore. Gehört zu js/store/firebase.js.
+// Dieselbe Datei gilt für beide Projekte: Dozierende und Student-Fassung (dort sind «dozierende» die Studierenden mit Konto).
 //
 // Wer ist wer:
 //   - Dozierende sind mit E-Mail und Passwort angemeldet. «Freigeschaltet» ist, wer ein Profil unter

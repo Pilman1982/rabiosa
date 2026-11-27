@@ -1,9 +1,10 @@
 // Studio der Dozierenden: anmelden, eigene Quiz verwalten, Quiz des Kollegiums spielen oder kopieren.
-import { h, rueckfrage, meldung, fehlerText } from '../ui.js';
+import { h, svg, marke, rueckfrage, meldung, fehlerText } from '../ui.js';
 import { t } from '../i18n.js';
 import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
 import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
+import { inhaltVon, suche, pfadVon, ordnerTeile, bekannteOrdner } from '../logik/ablage.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
 export async function kopiereQuiz(store, quiz, titel) {
@@ -25,6 +26,7 @@ export function zeige(wurzel, ctx) {
   let konto;                      // undefined = lädt
   let reiter = 'meine';
   let meine = null, kollegium = null;
+  let pfad = [], anfrage = '';    // Ablage der Freigaben: geöffneter Ordner und Suchtext
   let form = 'anmelden';          // 'anmelden' | 'registrieren'
   let beschaeftigt = false;
 
@@ -38,6 +40,8 @@ export function zeige(wurzel, ctx) {
       const [m, k] = await Promise.all([store.quiz.meine(), store.quiz.kollegium()]);
       meine = m;
       kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
+      // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen.
+      try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium]))); } catch { /* ohne Speicher */ }
     } catch (e) { meldung(fehlerText(s(), e)); meine ??= []; kollegium ??= []; }
     zeichne();
   }
@@ -103,7 +107,7 @@ export function zeige(wurzel, ctx) {
     };
     return h('div', { class: 'anmeldung' }, h('form', { class: 'anmeldekarte', onsubmit: los },
       sprachwahl(),
-      h('a', { class: 'marke-klein', href: '#/' }, 'RABIOSA'),
+      h('a', { class: 'marke-klein', href: '#/' }, marke()),
       h('p', { class: 'unter' }, T('studio.titel')),
       ctx.demo ? h('p', { class: 'demohinweis' }, T('allg.demo'), ' ', T('studio.demoCode')) : null,
       registrieren ? nameL : null, mailL, pwL,
@@ -122,7 +126,7 @@ export function zeige(wurzel, ctx) {
       try { await store.konto.freischalten(codeF.value.trim()); } catch (err) { hinweis.textContent = fehlerText(s(), err); }
     };
     return h('div', { class: 'anmeldung' }, h('form', { class: 'anmeldekarte', onsubmit: los },
-      h('a', { class: 'marke-klein', href: '#/' }, 'RABIOSA'),
+      h('a', { class: 'marke-klein', href: '#/' }, marke()),
       h('p', { class: 'unter' }, T('studio.titel')),
       h('p', null, T('studio.gesperrt')),
       h('label', null, h('span', { class: 'lab' }, T('studio.code')), codeF),
@@ -145,6 +149,7 @@ export function zeige(wurzel, ctx) {
     return h('article', { class: 'karte' },
       h('h3', null, titel),
       h('p', { class: 'meta' }, meta(q)),
+      ordnerTeile(q.ordner).length ? ablageort(q) : null,
       unvollstaendig ? h('span', { class: 'etikett' }, T('studio.unvollstaendig')) : null,
       h('label', { class: 'schalter' }, haken, T('studio.freigeben')),
       h('div', { class: 'kartenknoepfe' },
@@ -155,11 +160,14 @@ export function zeige(wurzel, ctx) {
         kleinerKnopf(T('studio.loeschen'), async () => { if (await rueckfrage(s(), T('studio.loeschenFrage', { titel }), T('studio.loeschen'))) tue(() => store.quiz.loeschen(q.id)); }, 'leise gefahr')));
   }
 
-  function kollegiumKarte(q) {
+  const ablageort = q => h('p', { class: 'ablageort' }, pfadVon(q, T('studio.ohneFach')).join(' › '));
+
+  function kollegiumKarte(q, mitOrt) {
     return h('article', { class: 'karte' },
       h('h3', null, q.titel),
       h('p', { class: 'meta' }, T('studio.von', { autor: q.autor || '?' })),
       h('p', { class: 'meta' }, meta(q)),
+      mitOrt ? ablageort(q) : null,
       h('div', { class: 'kartenknoepfe' },
         kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
         h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
@@ -179,16 +187,51 @@ export function zeige(wurzel, ctx) {
     }
     if (!kollegium) return h('p', { class: 'leer' }, T('allg.laedt'));
     if (!kollegium.length) return h('p', { class: 'leer' }, T('studio.kollegiumLeer'));
-    const faecher = new Map();
-    for (const q of kollegium) { const f = q.fach || T('studio.ohneFach'); if (!faecher.has(f)) faecher.set(f, []); faecher.get(f).push(q); }
-    return [...faecher.keys()].sort((a, b) => a.localeCompare(b)).map(f => [h('h2', { class: 'fachtitel' }, f), h('div', { class: 'karten' }, faecher.get(f).map(kollegiumKarte))]);
+    return ablage();
+  }
+
+  /** Freigaben als Ordner (Fach, darunter die Ordner aus dem Editor) mit Suche über alles. */
+  function ablage() {
+    const ohne = T('studio.ohneFach');
+    const feld = h('input', { class: 'feld suchfeld', type: 'search', value: anfrage, placeholder: T('studio.suchen'), 'aria-label': T('studio.suchen') });
+    const bereich = h('div', { class: 'ablage' });
+    const geheZu = neu => { pfad = neu; fuelle(); };
+    const krume = (text, ziel, hier) => hier
+      ? h('span', { 'aria-current': 'page' }, text)
+      : h('button', { type: 'button', class: 'krume', onclick: () => geheZu(ziel) }, text);
+    const ordnerKnopf = o => h('button', { type: 'button', class: 'ordner', onclick: () => geheZu([...pfad, o.name]) },
+      svg('<svg class="ordnerbild" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v8.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" fill="currentColor"/></svg>'),
+      h('span', { class: 'ordnername' }, o.name), h('span', { class: 'ordnerzahl' }, String(o.anzahl)));
+    // Nur dieser Bereich wird neu gezeichnet: Das Suchfeld behält beim Tippen den Fokus.
+    function fuelle() {
+      if (anfrage.trim()) {
+        const treffer = suche(kollegium, anfrage);
+        bereich.replaceChildren(
+          h('p', { class: 'trefferzahl', role: 'status' }, treffer.length ? T('studio.treffer', { n: treffer.length }) : T('studio.keineTreffer')),
+          h('div', { class: 'karten' }, treffer.map(q => kollegiumKarte(q, true))));
+        return;
+      }
+      let inhalt = inhaltVon(kollegium, pfad, ohne);
+      // Der geöffnete Ordner ist leer geworden (Freigabe zurückgezogen): eine Stufe hinauf.
+      while (pfad.length && !inhalt.ordner.length && !inhalt.quizze.length) { pfad = pfad.slice(0, -1); inhalt = inhaltVon(kollegium, pfad, ohne); }
+      bereich.replaceChildren(...[   // replaceChildren schriebe «null» als Text hin, darum gefiltert
+        pfad.length ? h('nav', { class: 'brotkrumen', 'aria-label': T('studio.ablage') },
+          krume(T('studio.kollegium'), [], false),
+          pfad.map((teil, i) => [h('span', { 'aria-hidden': 'true' }, '›'), krume(teil, pfad.slice(0, i + 1), i === pfad.length - 1)])) : null,
+        inhalt.ordner.length ? h('div', { class: 'ordnerliste' }, inhalt.ordner.map(ordnerKnopf)) : null,
+        inhalt.quizze.length ? h('div', { class: 'karten' }, inhalt.quizze.map(q => kollegiumKarte(q, false))) : null,
+      ].filter(Boolean));
+    }
+    feld.addEventListener('input', () => { anfrage = feld.value; fuelle(); });
+    fuelle();
+    return [h('div', { class: 'suchzeile' }, feld), bereich];
   }
 
   function studio() {
     const reiterKnopf = (k, text) => h('button', { class: 'reiterknopf' + (reiter === k ? ' an' : ''), onclick: () => { reiter = k; zeichne(); } }, text);
     return h('div', { class: 'studio' },
       h('header', { class: 'studiokopf' },
-        h('a', { class: 'marke-klein', href: '#/' }, 'RABIOSA'), h('h1', null, T('studio.titel')),
+        h('a', { class: 'marke-klein', href: '#/' }, marke()), h('h1', null, T('studio.titel')),
         h('nav', { class: 'reiter' }, reiterKnopf('meine', T('studio.meine')), reiterKnopf('kollegium', T('studio.kollegium'))),
         h('span', { class: 'platzhalter' }),
         h('span', { class: 'wer' }, konto.name),
