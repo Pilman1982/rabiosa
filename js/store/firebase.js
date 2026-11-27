@@ -61,7 +61,7 @@ async function versuche(aktion, ersatz) {
 /** Was die Regeln als Antwort annehmen: Zahl, Ja/Nein, kurzer Text oder kurze Liste. */
 function antwortErlaubt(wert) {
   if (typeof wert === 'number' || typeof wert === 'boolean') return true;
-  if (typeof wert === 'string') return wert.length <= 60;
+  if (typeof wert === 'string') return wert.length <= 300;   // wie in firestore.rules
   return Array.isArray(wert) && wert.length <= 6 && wert.every(w => w !== undefined && !Array.isArray(w));
 }
 

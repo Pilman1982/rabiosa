@@ -382,7 +382,7 @@ export function zeige(wurzel, ctx, quizId) {
     try {
       const q = await store.quiz.laden(quizId);
       if (abgebaut) return;
-      if (!q || quizFehler(q).length) { wurzel.replaceChildren(hinweisSeite(T('cloche.nichtLadbar'))); return; }
+      if (!q || q.art === 'praesentation' || quizFehler(q).length) { wurzel.replaceChildren(hinweisSeite(T('cloche.nichtLadbar'))); return; }
       quiz = q;
       await Promise.all(quiz.fragen.filter(f => f.bildId).map(f => store.quiz.bildLaden(quiz.id, f.bildId).then(d => bilder.set(f.bildId, d)).catch(() => {})));
       if (abgebaut) return;

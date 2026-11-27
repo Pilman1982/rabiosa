@@ -314,6 +314,7 @@ export function zeige(wurzel, ctx, code) {
 
   let letzteFrage = -1;
   function uebernimm(s) {
+    if (s && s.art === 'praesentation') { location.replace('#/p/' + code); return; }   // Präsentation: eigene Ansicht ohne Avatar
     if (s) hatteSpiel = true;
     spiel = s;
     // Ausweis aus einem früheren Spiel mit zufällig gleichem Code: verwerfen.

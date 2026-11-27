@@ -371,6 +371,7 @@ export function zeige(wurzel, ctx, code) {
       spiel = s;
       if (!s) { zustand = 'weg'; zeichne(); return; }
       if (s.hostUid !== konto.uid) { zustand = 'fremd'; zeichne(); return; }
+      if (s.art === 'praesentation') { ctx.geh('#/praesentation/' + code); return; }
       if (!laedt) { laedt = true; ladeAllesZum(s); return; }
       if (zustand !== 'bereit') return;
       if (s.status === 'podest' && !podestGespielt) { podestGespielt = true; ton.spiele('podest'); }

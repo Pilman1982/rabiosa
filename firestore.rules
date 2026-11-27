@@ -74,7 +74,7 @@ service cloud.firestore {
         && d.zeit == request.time
         && (d.wert is number
           || d.wert is bool
-          || (d.wert is string && d.wert.size() <= 60)
+          || (d.wert is string && d.wert.size() <= 300)   // 300: offene Fragen der Präsentation (250 Zeichen, Luft für Umlaute)
           || (d.wert is list && d.wert.size() <= 6));
     }
 

@@ -257,6 +257,7 @@ export function zeige(wurzel, ctx, quizId) {
     try {
       const q = await store.quiz.laden(quizId);
       if (q.besitzer !== konto.uid) { ctx.geh('#/studio'); return; }
+      if (q.art === 'praesentation') { ctx.geh('#/studio/folien/' + quizId); return; }
       if (abgebaut) return;
       quiz = JSON.parse(JSON.stringify(q));
       zeichneAlles();

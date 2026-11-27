@@ -5,6 +5,7 @@ import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
 import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
 import { inhaltVon, suche, pfadVon, ordnerTeile, bekannteOrdner } from '../logik/ablage.js';
+import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
 export async function kopiereQuiz(store, quiz, titel) {
@@ -58,9 +59,10 @@ export function zeige(wurzel, ctx) {
   const spiele = alt => tue(async () => {
     const quiz = await store.quiz.laden(alt.id);   // frischer Stand, falls die Liste schon länger offen ist
     if (quizFehler(quiz).length) { if (quiz.besitzer === konto.uid) ctx.geh('#/studio/quiz/' + quiz.id); else await lade(); return; }
-    const { oeffentlich, privat } = neuesSpiel(quiz, konto.uid);
+    const praes = istPraesentation(quiz);
+    const { oeffentlich, privat } = praes ? neueSitzung(quiz, konto.uid) : neuesSpiel(quiz, konto.uid);
     const code = await store.spiel.erstellen(oeffentlich, privat);
-    ctx.geh('#/beamer/' + code);
+    ctx.geh((praes ? '#/praesentation/' : '#/beamer/') + code);
   }, false);
 
   /** Quiz aus der Antwort einer KI: einlesen, speichern, im Editor zum Durchlesen öffnen. */
@@ -137,7 +139,14 @@ export function zeige(wurzel, ctx) {
   }
 
   // ---------- Listen ----------
-  const meta = q => [q.fach || T('studio.ohneFach'), T('studio.fragen', { n: q.fragen.length }), (q.sprache || 'de').toUpperCase()].join(' · ');
+  const meta = q => [q.fach || T('studio.ohneFach'), T(istPraesentation(q) ? 'studio.folien' : 'studio.fragen', { n: q.fragen.length }), (q.sprache || 'de').toUpperCase()].join(' · ');
+  const bearbeiten = q => (istPraesentation(q) ? '#/studio/folien/' : '#/studio/quiz/') + q.id;
+  const artEtikett = q => (istPraesentation(q) ? h('span', { class: 'etikett art' }, T('studio.artPraesentation')) : null);
+  /** Knöpfe zum Starten: Präsentationen werden präsentiert, Quiz live oder als Cloche gespielt. */
+  const startKnoepfe = q => (istPraesentation(q)
+    ? [kleinerKnopf(T('studio.praesentieren'), () => spiele(q), '')]
+    : [kleinerKnopf(T('studio.spielen'), () => spiele(q), ''), kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), '')]);
+  const rueckblickText = q => T(istPraesentation(q) ? 'studio.ergebnisse' : 'studio.rueckblicke');
   const kleinerKnopf = (text, klick, klasse = 'leise') => h('button', { class: 'knopf klein ' + klasse, onclick: klick }, text);
 
   function meineKarte(q) {
@@ -147,16 +156,16 @@ export function zeige(wurzel, ctx) {
     // Erst frisch laden: Die Liste kann älter sein als die letzte Änderung im Editor.
     haken.addEventListener('change', () => { const frei = haken.checked; tue(async () => store.quiz.speichern({ ...await store.quiz.laden(q.id), freigegeben: frei })); });
     return h('article', { class: 'karte' },
+      artEtikett(q),
       h('h3', null, titel),
       h('p', { class: 'meta' }, meta(q)),
       ordnerTeile(q.ordner).length ? ablageort(q) : null,
       unvollstaendig ? h('span', { class: 'etikett' }, T('studio.unvollstaendig')) : null,
       h('label', { class: 'schalter' }, haken, T('studio.freigeben')),
       h('div', { class: 'kartenknoepfe' },
-        unvollstaendig ? null : kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
-        unvollstaendig ? null : kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), ''),
-        h('a', { class: 'knopf klein leise', href: '#/studio/quiz/' + q.id }, T('studio.bearbeiten')),
-        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
+        unvollstaendig ? null : startKnoepfe(q),
+        h('a', { class: 'knopf klein leise', href: bearbeiten(q) }, T('studio.bearbeiten')),
+        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, rueckblickText(q)),
         kleinerKnopf(T('studio.duplizieren'), () => tue(() => kopiereQuiz(store, q, `${titel} (${T('studio.kopie')})`))),
         kleinerKnopf(T('studio.loeschen'), async () => { if (await rueckfrage(s(), T('studio.loeschenFrage', { titel }), T('studio.loeschen'))) tue(() => store.quiz.loeschen(q.id)); }, 'leise gefahr')));
   }
@@ -165,14 +174,14 @@ export function zeige(wurzel, ctx) {
 
   function kollegiumKarte(q, mitOrt) {
     return h('article', { class: 'karte' },
+      artEtikett(q),
       h('h3', null, q.titel),
       h('p', { class: 'meta' }, T('studio.von', { autor: q.autor || '?' })),
       h('p', { class: 'meta' }, meta(q)),
       mitOrt ? ablageort(q) : null,
       h('div', { class: 'kartenknoepfe' },
-        kleinerKnopf(T('studio.spielen'), () => spiele(q), ''),
-        kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), ''),
-        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, T('studio.rueckblicke')),
+        startKnoepfe(q),
+        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, rueckblickText(q)),
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
 
@@ -182,8 +191,10 @@ export function zeige(wurzel, ctx) {
       return [
         h('div', { class: 'aktionen' },
           h('button', { class: 'knopf', onclick: () => tue(async () => { ctx.geh('#/studio/quiz/' + await store.quiz.speichern(neuesQuiz(s()))); }, false) }, '+ ' + T('studio.neu')),
+          h('button', { class: 'knopf', onclick: () => tue(async () => { ctx.geh('#/studio/folien/' + await store.quiz.speichern(neuePraesentation(s()))); }, false) }, '+ ' + T('studio.neuPraesentation')),
           h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import')),
-          h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielQuiz(s()))) }, T('studio.beispiel'))),
+          h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielQuiz(s()))) }, T('studio.beispiel')),
+          h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielPraesentation(s()))) }, T('studio.beispielPraesentation'))),
         meine.length ? h('div', { class: 'karten' }, meine.map(meineKarte)) : h('p', { class: 'leer' }, T('studio.leer')),
       ];
     }
@@ -240,7 +251,7 @@ export function zeige(wurzel, ctx) {
         sprachwahl(),
         h('button', { class: 'knopf klein leise', onclick: () => store.konto.abmelden() }, T('studio.abmelden'))),
       ctx.demo ? h('p', { class: 'demohinweis' }, T('allg.demo')) : null,
-      laufend ? h('p', { class: 'laufend' }, h('a', { class: 'knopf klein', href: '#/beamer/' + laufend }, T('studio.fortsetzen', { code: laufend.slice(0, 3) + ' ' + laufend.slice(3) }))) : null,
+      laufend ? h('p', { class: 'laufend' }, h('a', { class: 'knopf klein', href: (laufendArt === 'praesentation' ? '#/praesentation/' : '#/beamer/') + laufend }, T('studio.fortsetzen', { code: laufend.slice(0, 3) + ' ' + laufend.slice(3) }))) : null,
       inhalt());
   }
 
@@ -250,7 +261,7 @@ export function zeige(wurzel, ctx) {
     wurzel.replaceChildren(konto === null ? anmeldung() : konto.freigeschaltet ? studio() : freischaltung());
   }
 
-  let aufgeraeumt = false, laufend = null, stoppLaufend = null;
+  let aufgeraeumt = false, laufend = null, laufendArt = null, stoppLaufend = null;
   /** Läuft noch ein eigenes Spiel (Fenster versehentlich geschlossen)? Dann einen Weg zurück anbieten. */
   function sucheLaufendes() {
     let code = null;
@@ -258,7 +269,8 @@ export function zeige(wurzel, ctx) {
     if (!/^\d{6}$/.test(code || '') || stoppLaufend) return;
     stoppLaufend = store.spiel.beobachten(code, s => {
       const neu = s && s.hostUid === konto?.uid && s.status !== 'ende' ? code : null;
-      if (neu !== laufend) { laufend = neu; zeichne(); }
+      const art = s?.art || null;
+      if (neu !== laufend || art !== laufendArt) { laufend = neu; laufendArt = art; zeichne(); }
     });
   }
   const stopp = store.konto.beobachten(k => {

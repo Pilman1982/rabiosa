@@ -42,7 +42,8 @@ function inhaltText(q) {
   const teile = [];
   for (const f of Array.isArray(q?.fragen) ? q.fragen : []) {
     if (!f) continue;
-    teile.push(f.text, f.erklaerung);
+    teile.push(f.text, f.erklaerung, f.inhalt, f.links, f.rechts);
+    for (const a of f.aussagen || []) teile.push(a);
     for (const a of f.antworten || []) teile.push(a?.text);
     for (const e of f.elemente || []) teile.push(e);
     for (const l of f.loesungen || []) teile.push(l);

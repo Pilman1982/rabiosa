@@ -1,6 +1,7 @@
 // Rückblick: zu jeder Frage die Lösung und wie die Klasse geantwortet hat. Ohne Namen.
 import { h, marke, BUCHSTABEN, fehlerText, datum } from '../ui.js';
 import { t } from '../i18n.js';
+import { zeichneFolie } from './folien.js';
 
 /**
  * Zeichnet Lösung und Verteilung einer Frage.
@@ -54,6 +55,7 @@ export function zeichneVerteilung(info, sprache) {
 /** Ein ganzer Rückblick (eine Durchführung). */
 export function zeichneRueckblick(rb, sprache) {
   const T = (k, w) => t(sprache, k, w);
+  if (rb.art === 'praesentation') return praesentationsRueckblick(rb, sprache);
   let schwierigste = false;
   const liste = h('div', { class: 'rb-fragen' });
   const knopf = h('button', { class: 'knopf leise klein' });
@@ -95,4 +97,17 @@ export function zeige(wurzel, ctx, quizId) {
     } catch (e) { inhalt.replaceChildren(h('p', { class: 'fehler' }, fehlerText(s, e))); }
   });
   return stopp;
+}
+
+/** Ergebnisse einer Präsentation: jede Folie mit Antworten, so wie sie am Beamer stand. */
+function praesentationsRueckblick(rb, sprache) {
+  const T = (k, w) => t(sprache, k, w);
+  return h('article', { class: 'rueckblick rb-praesentation' },
+    h('header', { class: 'rb-kopf' },
+      h('div', null, h('h2', null, rb.quizTitel), h('p', null, `${T('rueckblick.vom', { datum: datum(sprache, rb.datum) })} · ${T('rueckblick.personen', { n: rb.spieler })}`))),
+    h('div', { class: 'rb-fragen' }, (rb.folien || []).map(f => h('section', { class: 'rb-frage' },
+      h('header', null,
+        h('h3', null, `${f.nr + 1}. ${t(sprache, 'folie.' + f.typ)}`),
+        h('p', { class: 'rb-zahlen' }, h('span', null, T('rbP.antworten', { n: f.ergebnis?.anzahl || 0 })))),
+      h('div', { class: 'rb-folie' }, zeichneFolie(f, f.ergebnis, sprache))))));
 }
