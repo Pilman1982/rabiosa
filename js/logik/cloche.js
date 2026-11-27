@@ -158,3 +158,11 @@ export function ladeStand(speicher) {
     return gueltig ? { ...s, zurueck: [] } : null;
   } catch { return null; }
 }
+
+/** Reihenfolge-Fragen: gemischt, aber für dasselbe Feld immer gleich (auch nach dem Neuladen). */
+export function gemischteReihe(n, nr) {
+  const k = (nr % Math.max(1, n - 1)) + 1;
+  const gemischt = Array.from({ length: n }, (_, i) => (i * k + nr) % n);
+  const ok = new Set(gemischt).size === n && gemischt.some((j, i) => j !== i);
+  return ok ? gemischt : Array.from({ length: n }, (_, i) => n - 1 - i);
+}

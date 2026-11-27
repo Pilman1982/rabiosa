@@ -92,6 +92,17 @@ const EINMAL = {
     const jetzt = kontext.currentTime;
     [[72, 0], [76, 0.11], [79, 0.22]].forEach(([m, v]) => ton(m, jetzt + v, 0.5, 0.12, 'triangle'));
   },
+  /** Cloche: die Glocke hebt sich. */
+  aufdecken() {
+    const jetzt = kontext.currentTime;
+    [[79, 0], [83, 0.05], [86, 0.1], [91, 0.15]].forEach(([m, v]) => ton(m, jetzt + v, 0.6, 0.06, 'sine'));
+  },
+  /** Cloche: eine Überraschungskarte. */
+  ueberraschung() {
+    const jetzt = kontext.currentTime;
+    [[62, 0], [66, 0.09], [69, 0.18], [74, 0.27], [78, 0.36]].forEach(([m, v]) => ton(m, jetzt + v, 0.35, 0.1, 'square'));
+    ton(50, jetzt + 0.36, 1.2, 0.16, 'sine');
+  },
   podest() {
     const jetzt = kontext.currentTime;
     [[60, 0], [64, 0.16], [67, 0.32], [72, 0.48]].forEach(([m, v]) => ton(m, jetzt + v, 0.5, 0.14, 'sawtooth'));

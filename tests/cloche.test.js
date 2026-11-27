@@ -228,3 +228,13 @@ test('ladeStand: kaputt oder alt gibt null, gesicherter Stand kommt zurück', ()
   assert.deepEqual(zurueck, { ...s, zurueck: [] });
   assert.equal(JSON.parse(sp.getItem(SPEICHER_KEY)).zurueck.length, 0);
 });
+
+test('gemischteReihe: echte Mischung, für dasselbe Feld immer gleich', async () => {
+  const { gemischteReihe } = await import('../js/logik/cloche.js');
+  for (const n of [3, 4, 5, 6]) for (const nr of [1, 2, 7, 24]) {
+    const r = gemischteReihe(n, nr);
+    assert.deepEqual([...r].sort(), Array.from({ length: n }, (_, i) => i), `n=${n} nr=${nr} keine Permutation`);
+    assert.ok(r.some((j, i) => j !== i), `n=${n} nr=${nr} nicht gemischt`);
+    assert.deepEqual(gemischteReihe(n, nr), r);
+  }
+});
