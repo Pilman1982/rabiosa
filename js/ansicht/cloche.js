@@ -313,7 +313,7 @@ export function zeige(wurzel, ctx, quizId) {
   function endeSeite() {
     const r = rangliste(stand.gruppen);
     const platz = (e, klasse) => e ? h('div', { class: 'pl cl-pl ' + klasse },
-      h('div', { class: 'rang' }, e.rang), h('div', { class: 'cl-medaille', style: `background:${e.farbe}` }, (/\d+$/.exec(e.name)?.[0] || e.name.slice(0, 1)).toUpperCase()),
+      h('div', { class: 'cl-medaille', style: `background:${e.farbe}` }, e.rang),
       h('b', null, e.name), h('span', null, T('beamer.punkte', { n: zahl(e.punkte) }))) : null;
     return buehne('b-navy',
       h('div', { class: 'podest' }, h('h2', null, T('beamer.siegerehrung')), h('p', { class: 'unter' }, stand.quizTitel)),

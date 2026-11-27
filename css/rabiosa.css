@@ -415,8 +415,8 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
 .cl-board { display: grid; gap: .9cqw; flex: 1; min-height: 0; }
 .cl-board.nummern { grid-auto-rows: 1fr; }
 .cl-spalte { display: grid; grid-template-rows: auto repeat(var(--zeilen, 3), minmax(0, 1fr)); gap: .7cqw; min-width: 0; min-height: 0; }
-.cl-thema { font-size: 1.05cqw; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; text-align: center; color: var(--navy);
-  border-bottom: .2cqw solid var(--kupfer); padding-bottom: .5cqw; min-height: 2.6cqw; display: grid; place-items: end center; line-height: 1.15; overflow-wrap: anywhere; }
+.cl-thema { font-size: 1.05cqw; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; text-align: center; color: var(--navy);
+  border-bottom: .2cqw solid var(--kupfer); padding-bottom: .5cqw; height: 4.4cqw; display: grid; place-items: end center; line-height: 1.15; hyphens: auto; overflow-wrap: break-word; overflow: hidden; }
 .cl-feld { position: relative; border: 0; border-radius: 1cqw; background: #fff; box-shadow: 0 .15cqw .5cqw #00143614, inset 0 0 0 .1cqw #e4e0d8;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2cqw; padding: .4cqw; min-height: 0; color: var(--navy); transition: transform .15s, box-shadow .15s; }
 button.cl-feld:hover { transform: translateY(-.25cqw); box-shadow: 0 .6cqw 1.2cqw #0014362a, inset 0 0 0 .15cqw var(--kupfer); }
