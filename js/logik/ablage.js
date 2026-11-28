@@ -148,10 +148,19 @@ export function umbenennen(quizze, leere, pfad, neuerName, ohneFach) {
   const mitNeuemNamen = x => { const teile = ordnerTeile(x.ordner); teile[stufe] = neu; return teile.join('/'); };
   const aenderungen = quizze.filter(q => istUnter(q, pfad, ohneFach))
     .map(q => ({ id: q.id, fach: q.fach ?? '', ordner: mitNeuemNamen(q) }));
-  return {
-    aenderungen,
-    leere: leere.map(e => (istUnter(e, pfad, ohneFach) ? { fach: e.fach ?? '', ordner: mitNeuemNamen(e) } : e)),
-  };
+  const neueLeere = leere.map(e => (istUnter(e, pfad, ohneFach) ? { fach: e.fach ?? '', ordner: mitNeuemNamen(e) } : e));
+  // Ein längerer Name kann tiefer liegende Ordner über die Grenze schieben: dann gar nicht umbenennen.
+  const zuLang = [...aenderungen, ...neueLeere].some(x => String(x.ordner).length > ORDNER_LAENGE);
+  return { aenderungen, leere: neueLeere, zuLang };
+}
+
+/** Führt alle Verschiebungen aus und macht nach einem Fehler (z. B. anderswo gelöscht) weiter. Ergebnis: Anzahl Fehler. */
+export async function alleVerschieben(aenderungen, schritt) {
+  let fehler = 0;
+  for (const a of aenderungen) {
+    try { await schritt(a); } catch { fehler++; }
+  }
+  return fehler;
 }
 
 /** Leere Ordner auf und unter dem Pfad aus der Liste nehmen. */
@@ -173,7 +182,7 @@ export function leereAufraeumen(leere, quizze, ohneFach) {
 
 /** Alle Ordner (auch Fächer und Zwischenstufen) für die Auswahl beim Verschieben, Stufe für Stufe sortiert. */
 export function alleOrdner(quizze, leere, ohneFach) {
-  const pfade = new Map();
+  const pfade = new Map([[gleich(ohneFach), [ohneFach]]]);   // «Ohne Fach» ist immer ein Ziel
   for (const x of [...quizze, ...leere]) {
     const p = pfadVon(x, ohneFach);
     for (let i = 1; i <= p.length; i++) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX, quelleMerken } from '../js/logik/ablage.js';
+import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX, quelleMerken, alleVerschieben } from '../js/logik/ablage.js';
 
 const q = (titel, fach, ordner, mehr = {}) => ({ id: titel, titel, fach, ordner, autor: 'Anna Muster', fragen: [], ...mehr });
 
@@ -174,4 +174,24 @@ test('quelleMerken: wird ein Ordner durch Verschieben leer, bleibt er als leerer
   assert.deepEqual(quelleMerken([a, c], [], a, 'Ohne Fach'), [{ fach: 'KUT', ordner: 'HS26/Final' }]);
   assert.deepEqual(quelleMerken([c], [{ fach: 'X', ordner: '' }], c, 'Ohne Fach'), [{ fach: 'X', ordner: '' }, { fach: 'KUT', ordner: 'HS26' }]);
   assert.deepEqual(quelleMerken([q('D', '', '')], [], q('D', '', ''), 'Ohne Fach'), [], '«Ohne Fach» selbst wird nicht gemerkt');
+});
+
+test('umbenennen: meldet zuLang, wenn ein Inhalt oder leerer Ordner darunter über ORDNER_LAENGE käme', () => {
+  const lang = 'B'.repeat(60);
+  const alle = [q('A', 'KUT', 'A/' + lang)];
+  assert.equal(umbenennen(alle, [], ['KUT', 'A'], 'C'.repeat(30), 'Ohne Fach').zuLang, true);
+  assert.equal(umbenennen([], [{ fach: 'KUT', ordner: 'A/' + lang }], ['KUT', 'A'], 'C'.repeat(30), 'Ohne Fach').zuLang, true);
+  assert.equal(umbenennen(alle, [], ['KUT', 'A'], 'C', 'Ohne Fach').zuLang, false);
+});
+
+test('alleVerschieben: macht nach einem Fehler weiter und zählt die Fehler', async () => {
+  const gemacht = [];
+  const schritt = async a => { if (a.id === 'X') throw new Error('nichtGefunden'); gemacht.push(a.id); };
+  const fehler = await alleVerschieben([{ id: 'A' }, { id: 'X' }, { id: 'B' }], schritt);
+  assert.equal(fehler, 1);
+  assert.deepEqual(gemacht, ['A', 'B']);
+});
+
+test('alleOrdner: «Ohne Fach» ist immer als Ziel dabei', () => {
+  assert.deepEqual(alleOrdner([q('A', 'KUT', '')], [], 'Ohne Fach'), [['KUT'], ['Ohne Fach']]);
 });

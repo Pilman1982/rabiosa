@@ -5,7 +5,7 @@ import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
 import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
 import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, leereAufraeumen, ARTEN,
-  ORDNER_TIEFE, ordnerNameFehler, umbenennen, ordnerEntfernen, alleOrdner, quelleMerken } from '../logik/ablage.js';
+  ORDNER_TIEFE, ordnerNameFehler, umbenennen, ordnerEntfernen, alleOrdner, quelleMerken, alleVerschieben } from '../logik/ablage.js';
 import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
@@ -29,6 +29,7 @@ export function zeige(wurzel, ctx) {
   let reiter = 'meine';
   let meine = null, kollegium = null;
   let leere = [];                 // eigene leere Ordner { fach, ordner }
+  let leereGeladen = false;       // nur dann darf die Liste überschrieben werden, sonst gingen gespeicherte verloren
   // Pro Reiter: geöffneter Ordner (Fach zuerst) und Suchtext. Die gewählte Art gilt für beide Reiter.
   const lage = { meine: { pfad: [], anfrage: '' }, kollegium: { pfad: [], anfrage: '' } };
   let artWahl = 'alle';
@@ -43,11 +44,13 @@ export function zeige(wurzel, ctx) {
   async function lade() {
     try {
       // Die Liste der leeren Ordner ist Zugabe: Fehlt sie (z. B. Regeln noch nicht veröffentlicht), geht das Studio trotzdem.
-      const [m, k, l] = await Promise.all([store.quiz.meine(), store.quiz.kollegium(), store.ordner.laden().catch(() => [])]);
+      const [m, k, [l, geladen]] = await Promise.all([store.quiz.meine(), store.quiz.kollegium(),
+        store.ordner.laden().then(liste => [liste, true], () => [[], false])]);
+      leereGeladen = geladen;
       meine = m;
       kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
       leere = leereAufraeumen(l, m, T('studio.ohneFach'));
-      if (leere.length < l.length) store.ordner.speichern(leere).catch(() => {});
+      if (geladen && leere.length < l.length) store.ordner.speichern(leere).catch(() => {});
       // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen; dazu die eigenen leeren.
       try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium, ...leere]))); } catch { /* ohne Speicher */ }
       // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen.
@@ -241,7 +244,7 @@ export function zeige(wurzel, ctx) {
   /** Inhalt in einen Ordner legen; liegt er schon dort, passiert nichts. Der Ordner, aus dem er kommt, bleibt stehen. */
   function verschiebe(q, ziel) {
     if (liegtGenau(q, ziel)) return;
-    const neueLeere = quelleMerken(meine, leere, q, ohneFach());
+    const neueLeere = leereGeladen ? quelleMerken(meine, leere, q, ohneFach()) : leere;
     tue(async () => {
       // Klappt das Merken nicht (Regel noch nicht veröffentlicht), wird trotzdem verschoben; der Ordner fällt dann weg.
       if (neueLeere !== leere) await store.ordner.speichern(neueLeere).catch(() => {});
@@ -265,7 +268,14 @@ export function zeige(wurzel, ctx) {
     d.showModal();
   }
 
+  /** Ohne geladene Liste würde jedes Speichern die gespeicherten leeren Ordner überschreiben. */
+  function leereBereit() {
+    if (!leereGeladen) meldung(T('studio.ordnerNichtGeladen'));
+    return leereGeladen;
+  }
+
   async function neuerOrdner(pfad, inhalt) {
+    if (!leereBereit()) return;
     const name = await eingabeFrage(s(), T('studio.ordnerName'), '', T('studio.anlegen'));
     if (name === null) return;
     const fehler = ordnerNameFehler(name, pfad, inhalt.ordner.map(o => o.name));
@@ -278,6 +288,7 @@ export function zeige(wurzel, ctx) {
   }
 
   async function ordnerUmbenennen(pfad) {
+    if (!leereBereit()) return;
     const alt = pfad.at(-1);
     const name = await eingabeFrage(s(), T('studio.umbenennenFrage'), alt, T('studio.umbenennen'));
     if (name === null || sauberName(name) === alt) return;
@@ -285,14 +296,18 @@ export function zeige(wurzel, ctx) {
     const fehler = ordnerNameFehler(name, pfad.slice(0, -1), geschwister);
     if (fehler) { meldung(T('studio.ordnerFehler.' + fehler)); return; }
     const r = umbenennen(meine, leere, pfad, name, ohneFach());
+    if (r.zuLang) { meldung(T('studio.ordnerFehler.lang')); return; }
     tue(async () => {
-      for (const a of r.aenderungen) await store.quiz.verschieben(a.id, a);
+      // Einzelne Fehler (anderswo gelöscht) halten den Rest nicht auf, sonst bliebe der Ordner halb umbenannt.
+      const fehler = await alleVerschieben(r.aenderungen, a => store.quiz.verschieben(a.id, a));
       await store.ordner.speichern(r.leere);
       lage.meine.pfad = [...pfad.slice(0, -1), sauberName(name)];
+      if (fehler) meldung(T('studio.umbenennenTeilweise', { n: fehler }));
     });
   }
 
   async function ordnerLoeschen(pfad) {
+    if (!leereBereit()) return;
     if (!(await rueckfrage(s(), T('studio.ordnerLoeschenFrage', { name: pfad.at(-1) }), T('studio.ordnerLoeschen')))) return;
     tue(async () => {
       await store.ordner.speichern(ordnerEntfernen(leere, pfad, ohneFach()));
