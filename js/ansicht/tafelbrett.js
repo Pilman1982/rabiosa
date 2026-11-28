@@ -13,6 +13,7 @@ import {
   neueKennung, zVorn, DROSSEL_MS, FREMD_MS,
 } from '../logik/tafelbrett.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
+import { ohneSperre } from '../logik/tafeluebersicht.js';
 import { zeichneElement, zeichneWelt } from './tafelelemente.js';
 import { erstelleWerkzeuge } from './tafelwerkzeuge.js';
 import { erstelleBilder, erstelleBildUrls } from './tafelbilder.js';
@@ -249,12 +250,36 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     oben.replaceChildren(...teile);
   }
 
+  // Leitung: Mitglied entfernen (mit Rückfrage) und eine abgegebene Gruppe wieder öffnen.
+  async function entferne(m) {
+    if (!(await rueckfrage(sprache(), T('brett.entfernenFrage', { name: m.name }), T('brett.entfernen')))) return;
+    try { await store.tafel.mitgliedEntfernen(code, m.uid); } catch (e) { meldung(fehlerText(sprache(), e)); }
+  }
+  async function wiederOeffnen() {
+    try { await store.tafel.aktualisieren(code, { gesperrt: ohneSperre(sitzung, gruppe) }); } catch (e) { meldung(fehlerText(sprache(), e)); }
+  }
+  // Studierende: die Gruppe gibt ab. Danach gilt sie als gesperrt, das Board ist nur noch zum Ansehen da.
+  async function abgeben() {
+    if (!schreibbar()) return;
+    werkzeuge.beendeBearbeitung();   // ein Text in Arbeit wird noch gespeichert, solange die Rückfrage offen ist
+    if (!(await rueckfrage(sprache(), T('brett.abgebenFrage'), T('brett.abgeben')))) return;
+    if (zu || !schreibbar()) return;
+    try { await store.tafel.abgeben(code); } catch (e) { meldung(fehlerText(sprache(), e)); }
+  }
+  // «HTML» liefert Task 10 über den Haken ctx.exportHtml(code, gruppe); ohne ihn bleibt der Knopf ausgeschaltet.
+  const htmlKnopf = (text, g) => (typeof ctx.exportHtml === 'function'
+    ? h('button', { type: 'button', class: 'tbr-knopf', onclick: () => ctx.exportHtml(code, g) }, text)
+    : h('button', { type: 'button', class: 'tbr-knopf', disabled: true, title: T('brett.spaeter') }, text));
+
   function zeichneKopf() {
     if (!gebaut || !sitzung) return;
     const jetzt = store.jetzt ? store.jetzt() : Date.now();
     const namen = [...mitglieder].sort((a, b) => String(a.name).localeCompare(String(b.name)))
-      .map(m => h('span', { class: 'tbr-mitglied' + (istOnline(m, jetzt) ? ' an' : '') }, m.name));
-    const gesperrt = sitzung && ((sitzung.gesperrt || []).includes(gruppe) || sitzung.status !== 'offen');
+      .map(m => h('span', { class: 'tbr-mitglied' + (istOnline(m, jetzt) ? ' an' : '') }, m.name,
+        leitung ? h('button', { type: 'button', class: 'tbr-entfernen', title: T('brett.entfernen'), 'aria-label': T('brett.entfernen') + ': ' + m.name, onclick: () => entferne(m) }, '✕') : null));
+    const abgegeben = (sitzung.gesperrt || []).includes(gruppe);
+    const gesperrt = abgegeben || sitzung.status !== 'offen';
+    const adresse = '#/t/' + code;
     kopfEl.replaceChildren(
       h('div', { class: 'tbr-zeile' },
         leitung ? h('a', { class: 'tbr-zurueck', href: '#/tafel/' + code, title: T('brett.uebersicht') }, '‹ ', T('brett.uebersicht')) : h('b', { class: 'tbr-marke' }, marke()),
@@ -262,6 +287,13 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
         h('span', { class: 'tbr-gruppe' }, sitzung.gruppen[gruppe] ?? ''),
         gesperrt ? h('span', { class: 'tbr-stand' }, sitzung.status !== 'offen' ? T('brett.beendetKurz') : T('brett.abgegebenKurz')) : null,
         h('span', { class: 'tbr-platz' }),
+        leitung && abgegeben ? h('button', { type: 'button', class: 'tbr-knopf', onclick: wiederOeffnen }, T('brett.wiederOeffnen')) : null,
+        !leitung && schreibbar() ? h('button', { type: 'button', class: 'tbr-knopf', onclick: abgeben }, T('brett.abgeben')) : null,
+        !leitung && abgegeben && sitzung.status === 'offen' ? [
+          h('a', { class: 'tbr-knopf', href: adresse + '/druck' }, T('brett.pdf')),
+          htmlKnopf(T('brett.html'), null),
+          h('a', { class: 'tbr-knopf', href: adresse + '/zeigen' }, T('brett.praesentieren')),
+        ] : null,
         sitzung.auftrag ? h('button', { class: 'tbr-auftragknopf', 'aria-expanded': String(auftragOffen), onclick: () => { auftragOffen = !auftragOffen; zeichneKopf(); } },
           T('brett.auftrag'), auftragOffen ? ' ▴' : ' ▾') : null),
       h('div', { class: 'tbr-mitglieder', 'aria-label': T('brett.mitglieder') }, namen.length ? namen : h('span', { class: 'tbr-mitglied' }, T('brett.keineMitglieder'))));
@@ -277,6 +309,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     hinweisEl.hidden = !m.hinweis;
     hinweisEl.textContent = m.hinweis;
     buehne.classList.toggle('nur-ansehen', !m.schreib);
+    zeichneKopf();
     zeichneOben();
   }
 
@@ -449,7 +482,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     else if (sitzung && leitung && ich && sitzung.hostUid !== ich.uid) kennung = 'fremd';
     else if (sitzung && ich !== undefined) kennung = 'bereit';
     if (kennung === gezeigt) {
-      if (kennung === 'bereit') { zeichneKopf(); aktualisiereModus(); }
+      if (kennung === 'bereit') aktualisiereModus();
       return;
     }
     if (gezeigt === 'bereit') { werkzeuge.abbrechen(); bilderMod?.abbau(); bilderMod = null; werkzeuge = LEER; gebaut = false; knoten.clear(); }

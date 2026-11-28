@@ -36,7 +36,8 @@ const ANSICHTEN = {
   tafeleditor: () => import('./ansicht/tafeleditor.js'),
   tafelbeitritt: () => import('./ansicht/tafelbeitritt.js'),
   tafelbrett: () => import('./ansicht/tafelbrett.js'),
-  // Weitere Whiteboard-Ansichten (tafeluebersicht, tafelzeigen …) folgen; bis dahin gilt die Startseite.
+  tafeluebersicht: () => import('./ansicht/tafeluebersicht.js'),
+  // Weitere Whiteboard-Ansichten (tafelzeigen, tafeldruck …) folgen; bis dahin gilt die Startseite.
 };
 
 let lauf = 0;
