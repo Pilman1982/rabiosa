@@ -11,6 +11,7 @@ import { stickerUrl } from './tafelelemente.js';
 const WARTEN_MS = 20_000;     // so lange wartet ein einmaliges Lesen auf den Server
 const GLEICHZEITIG = 6;       // Bilder, die gleichzeitig geladen werden
 const FREIGEBEN_MS = 30_000;  // so lange bleibt die Adresse der heruntergeladenen Datei gültig
+const WARNUNG_MS = 8000;      // so lange bleibt der Hinweis «Bilder fehlen» stehen
 
 const fehler = code => Object.assign(new Error('tafelexport:' + code), { code });
 
@@ -140,6 +141,7 @@ export async function exportiereHtml(store, sprache, code, gruppe) {
     const html = htmlExport({ sitzung, gruppen, bilder, sprache: sp, logo });
     herunterladen(new Blob([html], { type: 'text/html;charset=utf-8' }), dateiname(sitzung, gruppe === null ? null : gruppen[0], 'html'));
     // bildLaden gibt nach einer Frist auf: Die Datei hat dann Platzhalter, und man soll es wissen.
-    if (benutzteBilder(gruppen).pfade.some(p => !bilder.has(p))) meldung(t(sprache, 'tx.bilderFehlen'));
+    // Länger stehen lassen als die übliche Meldung: Sie ist eine Warnung, kein Fortschritt (die Aufrufer melden nur Fehler).
+    if (benutzteBilder(gruppen).pfade.some(p => !bilder.has(p))) meldung(t(sprache, 'tx.bilderFehlen'), WARNUNG_MS);
   } finally { laufend.delete(schluessel); }
 }

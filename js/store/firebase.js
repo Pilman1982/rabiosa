@@ -18,8 +18,8 @@ const SCHLUESSEL_MIN = 20;          // wie in firestore.rules
 const STAPEL_GROSS = 200;           // Löschungen pro Stapel, wenn der Server gleiche Regel-Zugriffe nur einmal zählt
 const STAPEL_KLEIN = 10;            // sonst: höchstens 20 Regel-Zugriffe pro Stapel, bis zu 2 pro Löschung
 const AUFRAEUMEN_MAX = 3;           // alte Spiele pro Aufruf von aufraeumen()
-/** So lange darf das Laden eines Whiteboard-Bildes dauern, dann gilt es als fehlend (CORS, Netz). Nur hier ändern. */
-export const TAFELBILD_WARTEN_MS = 15_000;
+/** So lange darf das Laden eines Whiteboard-Bildes insgesamt dauern, dann gilt es als fehlend (CORS, Netz). Reicht für ein GIF mit 8 MB bei rund 1.6 Mbit/s (belastetes Schul-WLAN). Nur hier ändern. */
+export const TAFELBILD_WARTEN_MS = 40_000;
 const TAFELBILDER_IM_KOPF = 60;     // so viele geladene Whiteboard-Bilder (Blob) merkt sich der Speicher
 // Felder eines Elements ausser id, gruppe, art (wie hasOnly in firestore.rules): Fehlt eines beim Ändern, wird es gelöscht.
 const ELEMENT_FELDER = ['x', 'y', 'b', 'h', 'z', 'farbe', 'text', 'groesse', 'punkte', 'dicke', 'form', 'zeichen',

@@ -84,11 +84,11 @@ export function eingabeFrage(sprache, text, vorgabe = '', jaText) {
   });
 }
 
-/** Kurze Meldung am unteren Rand. */
-export function meldung(text) {
+/** Kurze Meldung am unteren Rand; ms = wie lange sie stehen bleibt. */
+export function meldung(text, ms = 3500) {
   const el = h('div', { class: 'meldung', role: 'status' }, text);
   document.body.append(el);
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => el.remove(), ms);
 }
 
 /** Text zu einem Fehler aus dem Speicher. */

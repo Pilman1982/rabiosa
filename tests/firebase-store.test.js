@@ -363,7 +363,7 @@ test('bildLaden: hängt das Herunterladen (CORS, Netz), kommt nach der Frist nul
   t.mock.timers.tick(TAFELBILD_WARTEN_MS);
   await leeren();
   assert.equal(ergebnis, null);
-  assert.ok(TAFELBILD_WARTEN_MS > 0 && TAFELBILD_WARTEN_MS <= 20_000);
+  assert.ok(TAFELBILD_WARTEN_MS >= 30_000 && TAFELBILD_WARTEN_MS <= 60_000, 'Platz für ein GIF mit 8 MB in einem belasteten Schul-WLAN, aber nicht endlos');
 });
 
 test('bildLaden: Fehler beim Herunterladen oder beim Laden des Storage-SDK -> null, kein Fehler', async () => {
