@@ -336,6 +336,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     if (ev.target.closest?.('.tbr-buehne') && schreibbar()) bilderMod.einfuegen(dateienIn(ev.dataTransfer), brettPunkt(ev));
   }
   function rad(ev) {
+    if (ev.target.closest?.('.tbs-wahl')) return;   // das Auswahlfenster der Sticker scrollt selbst
     ev.preventDefault();
     const r = buehne.getBoundingClientRect();
     if (ev.ctrlKey || ev.metaKey) zoomeUm(Math.exp(-ev.deltaY * 0.0015), ev.clientX - r.left, ev.clientY - r.top);
