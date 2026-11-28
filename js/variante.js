@@ -10,3 +10,5 @@ export const VARIANTE = varianteVon(globalThis.document);
 export const IST_STUDENT = VARIANTE === 'student';
 /** Steht neben dem Namen «RABIOSA». */
 export const ZUSATZ = IST_STUDENT ? 'Student' : '';
+/** Whiteboards gibt es nur in der Fassung der Dozierenden. */
+export const zeigeWhiteboard = variante => variante !== 'student';

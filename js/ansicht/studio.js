@@ -7,6 +7,8 @@ import { neuesSpiel } from '../logik/spiel.js';
 import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, leereAufraeumen, ARTEN,
   ORDNER_TIEFE, ordnerNameFehler, umbenennen, ordnerEntfernen, alleOrdner, quelleMerken, alleVerschieben } from '../logik/ablage.js';
 import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
+import { istWhiteboard, neueTafelVorlage, beispielTafel, sitzungAusVorlage, GRUPPEN_MIN, GRUPPEN_MAX, GRUPPEN_VORGABE } from '../logik/tafel.js';
+import { VARIANTE, zeigeWhiteboard } from '../variante.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
 export async function kopiereQuiz(store, quiz, titel) {
@@ -75,6 +77,61 @@ export function zeige(wurzel, ctx) {
     const code = await store.spiel.erstellen(oeffentlich, privat);
     ctx.geh((praes ? '#/praesentation/' : '#/beamer/') + code);
   }, false);
+
+  /** Whiteboard starten: Gruppenzahl und -namen wählen, Sitzung anlegen, zur Übersicht. */
+  async function tafelStarten(alt) {
+    const vorlage = await store.quiz.laden(alt.id).catch(() => null);   // frischer Stand, falls die Liste älter ist
+    if (!vorlage) { await lade(); return; }
+    if (quizFehler(vorlage).length) { if (vorlage.besitzer === konto.uid) ctx.geh('#/studio/whiteboard/' + vorlage.id); else await lade(); return; }
+    const namen = await gruppenDialog(vorlage);
+    if (!namen) return;
+    tue(async () => {
+      const code = await store.tafel.erstellen(sitzungAusVorlage(vorlage, namen, konto.uid));
+      ctx.geh('#/tafel/' + code);
+    }, false);
+  }
+
+  /** Dialog: Anzahl Gruppen (2 bis 8) und ein Namensfeld je Gruppe. Ergebnis: Liste der Namen oder null. */
+  function gruppenDialog(vorlage) {
+    // Die Namen sehen die Studierenden: Sprache der Vorlage.
+    const standard = n => t(vorlage.sprache === 'en' ? 'en' : 'de', 'tafel.gruppeNr', { n });
+    const vorgabe = Number.isInteger(vorlage.gruppenVorgabe) && vorlage.gruppenVorgabe >= GRUPPEN_MIN && vorlage.gruppenVorgabe <= GRUPPEN_MAX ? vorlage.gruppenVorgabe : GRUPPEN_VORGABE;
+    const eingegeben = [];           // gemerkte Eingaben, wenn die Anzahl geändert wird
+    return new Promise(fertig => {
+      const zahl = h('select', { class: 'feld', 'aria-label': T('tafel.gruppenAnzahl') },
+        Array.from({ length: GRUPPEN_MAX - GRUPPEN_MIN + 1 }, (_, i) => h('option', { value: String(GRUPPEN_MIN + i) }, String(GRUPPEN_MIN + i))));
+      zahl.value = String(vorgabe);
+      const felder = h('div', { class: 'gruppenfelder' });
+      const fuelle = () => {
+        const n = Number(zahl.value);
+        felder.replaceChildren(...Array.from({ length: n }, (_, i) => {
+          const f = h('input', { class: 'feld', value: eingegeben[i] ?? standard(i + 1), maxlength: '30', autocomplete: 'off', 'aria-label': standard(i + 1) });
+          f.addEventListener('input', () => { eingegeben[i] = f.value; });
+          return f;
+        }));
+      };
+      zahl.addEventListener('change', fuelle);
+      fuelle();
+      const d = h('dialog', { class: 'rueckfrage gruppendialog' },
+        h('form', { onsubmit: e => { e.preventDefault(); d.close('ja'); } },
+          h('p', null, T('tafel.startTitel', { titel: vorlage.titel })),
+          h('label', null, h('span', { class: 'lab' }, T('tafel.gruppenAnzahl')), zahl),
+          h('span', { class: 'lab' }, T('tafel.gruppenNamen')), felder,
+          h('p', { class: 'hilfe' }, T('tafel.namenFix')),
+          h('div', { class: 'knopfzeile' },
+            h('button', { type: 'button', class: 'knopf leise', onclick: () => d.close('nein') }, T('allg.abbrechen')),
+            h('button', { type: 'submit', class: 'knopf' }, T('tafel.losgehts')))));
+      d.addEventListener('close', () => {
+        const n = Number(zahl.value);
+        const namen = [...felder.querySelectorAll('input')].map((f, i) => f.value.trim().replace(/\s+/g, ' ') || standard(i + 1));
+        const ja = d.returnValue === 'ja';
+        d.remove();
+        fertig(ja && namen.length === n ? namen : null);
+      });
+      document.body.append(d);
+      d.showModal();
+    });
+  }
 
   /** Quiz aus der Antwort einer KI: einlesen, speichern, im Editor zum Durchlesen öffnen. */
   async function importiere() {
@@ -153,15 +210,19 @@ export function zeige(wurzel, ctx) {
   }
 
   // ---------- Listen ----------
-  const meta = q => [q.fach || T('studio.ohneFach'), T(istPraesentation(q) ? 'studio.folien' : 'studio.fragen', { n: q.fragen.length }), (q.sprache || 'de').toUpperCase()].join(' · ');
-  const bearbeiten = q => (istPraesentation(q) ? '#/studio/folien/' : '#/studio/quiz/') + q.id;
+  const mengeKey = q => (istWhiteboard(q) ? 'studio.zonen' : istPraesentation(q) ? 'studio.folien' : 'studio.fragen');
+  const meta = q => [q.fach || T('studio.ohneFach'), T(mengeKey(q), { n: q.fragen.length }), (q.sprache || 'de').toUpperCase()].join(' · ');
+  const bearbeiten = q => (istWhiteboard(q) ? '#/studio/whiteboard/' : istPraesentation(q) ? '#/studio/folien/' : '#/studio/quiz/') + q.id;
   const ART_ETIKETT = { quiz: 'studio.artQuiz', praesentation: 'studio.artPraesentation', whiteboard: 'studio.artWhiteboard' };
   const artEtikett = q => h('span', { class: 'etikett art ' + artVon(q) }, T(ART_ETIKETT[artVon(q)]));
   /** Knöpfe zum Starten: Präsentationen werden präsentiert, Quiz live oder als Cloche gespielt. */
-  const startKnoepfe = q => (istPraesentation(q)
-    ? [kleinerKnopf(T('studio.praesentieren'), () => spiele(q), '')]
-    : [kleinerKnopf(T('studio.spielen'), () => spiele(q), ''), kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), '')]);
-  const rueckblickText = q => T(istPraesentation(q) ? 'studio.ergebnisse' : 'studio.rueckblicke');
+  const startKnoepfe = q => (istWhiteboard(q)
+    ? [kleinerKnopf(T('studio.starten'), () => tafelStarten(q), '')]
+    : istPraesentation(q)
+      ? [kleinerKnopf(T('studio.praesentieren'), () => spiele(q), '')]
+      : [kleinerKnopf(T('studio.spielen'), () => spiele(q), ''), kleinerKnopf(T('studio.cloche'), () => ctx.geh('#/cloche/' + q.id), '')]);
+  const rueckblickText = q => T(istPraesentation(q) || istWhiteboard(q) ? 'studio.ergebnisse' : 'studio.rueckblicke');
+  const rueckblickLink = q => (istWhiteboard(q) ? '#/studio/tafeln/' : '#/studio/rueckblick/') + q.id;
   const kleinerKnopf = (text, klick, klasse = 'leise') => h('button', { class: 'knopf klein ' + klasse, onclick: klick }, text);
 
   function meineKarte(q, mitOrt) {
@@ -181,7 +242,7 @@ export function zeige(wurzel, ctx) {
       h('div', { class: 'kartenknoepfe' },
         unvollstaendig ? null : startKnoepfe(q),
         h('a', { class: 'knopf klein leise', href: bearbeiten(q) }, T('studio.bearbeiten')),
-        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, rueckblickText(q)),
+        h('a', { class: 'knopf klein leise', href: rueckblickLink(q) }, rueckblickText(q)),
         kleinerKnopf(T('studio.verschieben'), () => verschiebenDialog(q)),
         kleinerKnopf(T('studio.duplizieren'), () => tue(() => kopiereQuiz(store, q, `${titel} (${T('studio.kopie')})`))),
         kleinerKnopf(T('studio.loeschen'), async () => { if (await rueckfrage(s(), T('studio.loeschenFrage', { titel }), T('studio.loeschen'))) tue(() => store.quiz.loeschen(q.id)); }, 'leise gefahr')));
@@ -198,7 +259,7 @@ export function zeige(wurzel, ctx) {
       mitOrt ? ablageort(q) : null,
       h('div', { class: 'kartenknoepfe' },
         startKnoepfe(q),
-        h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, rueckblickText(q)),
+        istWhiteboard(q) ? null : h('a', { class: 'knopf klein leise', href: rueckblickLink(q) }, rueckblickText(q)),
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
 
@@ -211,7 +272,12 @@ export function zeige(wurzel, ctx) {
         neuKnopf(T('studio.neu'), () => tue(async () => { ctx.geh('#/studio/quiz/' + await store.quiz.speichern(imOffenenOrdner(neuesQuiz(s())))); }, false)),
         neuKnopf(T('studio.neuPraesentation'), () => tue(async () => { ctx.geh('#/studio/folien/' + await store.quiz.speichern(imOffenenOrdner(neuePraesentation(s())))); }, false)),
         neuKnopf(T('studio.beispiel'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielQuiz(s()))))),
-        neuKnopf(T('studio.beispielPraesentation'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielPraesentation(s())))))));
+        neuKnopf(T('studio.beispielPraesentation'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielPraesentation(s()))))),
+        // Whiteboards gibt es nur in der Fassung der Dozierenden.
+        zeigeWhiteboard(VARIANTE) ? [
+          neuKnopf(T('studio.neuWhiteboard'), () => tue(async () => { ctx.geh('#/studio/whiteboard/' + await store.quiz.speichern(imOffenenOrdner(neueTafelVorlage(s())))); }, false)),
+          neuKnopf(T('studio.beispielWhiteboard'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielTafel(s()))))),
+        ] : null));
     // Offenes Menü schliesst mit Escape oder einem Klick daneben, sonst liegt es über den Knöpfen darunter.
     const zu = e => { if (e.type === 'keydown' ? e.key === 'Escape' : !menue.contains(e.target)) menue.open = false; };
     menue.addEventListener('toggle', () => {

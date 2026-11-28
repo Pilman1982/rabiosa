@@ -1,17 +1,9 @@
-// Einstieg: wählt den Speicher und zeigt je nach Adresse die passende Ansicht.
-//   #/                      Startseite (Code eingeben)
-//   #/123456                Handy der Studierenden
-//   #/beamer/123456         Beamer / Spielleitung
-//   #/studio                Studio der Dozierenden
-//   #/studio/quiz/ID        Quiz-Editor
-//   #/studio/rueckblick/ID  Rückblicke zu einem Quiz
-//   #/cloche/ID             Cloche: Board mit Gruppen auf diesem Laptop
-//   #/p/123456              Handy in einer Präsentation
-//   #/praesentation/123456  Präsentation am Beamer
-//   #/studio/folien/ID      Editor einer Präsentation
+// Einstieg: wählt den Speicher und zeigt je nach Adresse die passende Ansicht (Adressen: js/route.js).
 import { waehleStore, istDemo } from './store/index.js';
 import { h, leere } from './ui.js';
 import { t } from './i18n.js';
+import { route } from './route.js';
+import { VARIANTE } from './variante.js';
 
 const wurzel = document.getElementById('app');
 let abbau = null;
@@ -41,35 +33,20 @@ const ANSICHTEN = {
   teilnahme: () => import('./ansicht/teilnahme.js'),
   praesentation: () => import('./ansicht/praesentation.js'),
   folieneditor: () => import('./ansicht/folieneditor.js'),
+  tafeleditor: () => import('./ansicht/tafeleditor.js'),
+  // Weitere Whiteboard-Ansichten (tafelbrett, tafelzeigen …) folgen; bis dahin gilt die Startseite.
 };
-
-function route() {
-  const teile = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  if (!teile.length) return ['start'];
-  if (/^\d{6}$/.test(teile[0])) return ['spieler', teile[0]];
-  if (teile[0] === 'cloche' && teile[1]) return ['cloche', teile[1]];
-  if (teile[0] === 'p' && /^\d{6}$/.test(teile[1] || '')) return ['teilnahme', teile[1]];
-  if (teile[0] === 'praesentation' && /^\d{6}$/.test(teile[1] || '')) return ['praesentation', teile[1]];
-  if (teile[0] === 'beamer' && /^\d{6}$/.test(teile[1] || '')) return ['beamer', teile[1]];
-  if (teile[0] === 'studio') {
-    if (teile[1] === 'quiz' && teile[2]) return ['editor', teile[2]];
-    if (teile[1] === 'folien' && teile[2]) return ['folieneditor', teile[2]];
-    if (teile[1] === 'rueckblick' && teile[2]) return ['rueckblick', teile[2]];
-    return ['studio'];
-  }
-  return ['start'];
-}
 
 let lauf = 0;
 async function zeige() {
   const meiner = ++lauf;
-  const [name, ...werte] = route();
+  const [name, ...werte] = route(location.hash, VARIANTE);
   try { abbau?.(); } catch (e) { console.error(e); }
   abbau = null;
   document.body.dataset.ansicht = name;
   leere(wurzel).append(h('p', { class: 'laedt' }, t(ctx.sprache, 'allg.laedt')));
   try {
-    const ansicht = ANSICHTEN[name]();   // lädt neben dem Speicher (Firebase-SDK) her, nicht erst danach
+    const ansicht = (ANSICHTEN[name] ?? ANSICHTEN.start)();   // lädt neben dem Speicher (Firebase-SDK) her, nicht erst danach
     ansicht.catch(() => {});             // ein Fehler wird beim await unten gemeldet
     store ??= await waehleStore();
     const modul = await ansicht;
