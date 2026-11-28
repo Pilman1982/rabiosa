@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codeText, beitrittsAdresse, alleSperren, ohneSperre, kachelStand, neueBilder, kacheln } from '../js/logik/tafeluebersicht.js';
+import { codeText, beitrittsAdresse, alleSperren, ohneSperre, kachelStand, neueBilder, kacheln, gleicheListe } from '../js/logik/tafeluebersicht.js';
 
 test('codeText: sechs Ziffern als «123 456»', () => {
   assert.equal(codeText('123456'), '123 456');
@@ -51,4 +51,13 @@ test('kacheln: je Gruppe Namen, Online-Zahl, Stand und Elemente; Gruppen ohne Mi
   assert.equal(k[1].stand, 'abgegeben');
   assert.equal(k[1].online, 1);
   assert.deepEqual(k[2], { nr: 2, name: 'C', namen: [], online: 0, stand: 'arbeitet', elemente: [] });
+});
+
+test('gleicheListe: gleiche Elemente in beliebiger Reihenfolge und Feldordnung zählen als gleich', () => {
+  const a = [{ id: 'a', x: 1, y: 2 }, { id: 'b', x: 3 }];
+  assert.equal(gleicheListe(a, [{ x: 3, id: 'b' }, { y: 2, x: 1, id: 'a' }]), true);
+  assert.equal(gleicheListe(a, [{ id: 'a', x: 1, y: 2 }, { id: 'b', x: 4 }]), false);
+  assert.equal(gleicheListe(a, [a[0]]), false);
+  assert.equal(gleicheListe(a, [a[0], { id: 'c', x: 3 }]), false);
+  assert.equal(gleicheListe([], []), true);
 });

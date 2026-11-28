@@ -4,12 +4,13 @@
 //
 // Bilder erscheinen in den Kacheln nur als Platzhalter (alle Bilder aller Gruppen zu laden wäre zu schwer);
 // in «Neue Bilder» werden sie geladen, zuerst die neuesten 24, mehr auf Knopfdruck.
-// «Alle als HTML» liefert Task 10 über den Haken ctx.exportHtml(code, null); ohne ihn bleibt der Knopf ausgeschaltet.
+// «Alle als HTML» liefert Task 10 über den Haken ctx.exportHtml(code, gruppe): gruppe === null = alle Gruppen (nur die Leitung),
+// eine Zahl = nur diese Gruppe. Ohne den Haken bleibt der Knopf ausgeschaltet.
 import { h, svg, marke, meldung, fehlerText, rueckfrage } from '../ui.js';
 import { t } from '../i18n.js';
 import { qrSvg } from '../qr.js';
 import { reihenfolge } from '../logik/tafelbrett.js';
-import { codeText, beitrittsAdresse, alleSperren, kacheln, neueBilder } from '../logik/tafeluebersicht.js';
+import { codeText, beitrittsAdresse, alleSperren, kacheln, neueBilder, gleicheListe } from '../logik/tafeluebersicht.js';
 import { zeichneElement, zeichneWelt } from './tafelelemente.js';
 import { erstelleBildUrls } from './tafelbilder.js';
 
@@ -24,7 +25,6 @@ export function zeige(wurzel, ctx, code) {
   let sitzung;                     // undefined = lädt, null = gibt es nicht
   let mitglieder = [], elemente = [];
   let zu = false, gestartet = false, praesentieren = false, bilderAnzahl = BILDER_SEITE, bald = null;
-  let boxen = [];                  // Vorschauen der Kacheln: { box, welt, raster }
   const stopps = [];
   const bilder = erstelleBildUrls(pfad => store.tafel.bildLaden(pfad));
   const melde = e => meldung(fehlerText(ctx.sprache, e));
@@ -49,27 +49,45 @@ export function zeige(wurzel, ctx, code) {
   }
 
   // ---------- Zeichnen ----------
+  // Das Gerüst (Kopf, Raster mit Beitritts- und Gruppenkacheln, «Neue Bilder») entsteht einmal. Danach ändert sich nur,
+  // was sich geändert hat: Eine Vorschau wird nur neu gebaut, wenn sich die Elemente ihrer Gruppe ändern; Zahlen und Namen
+  // werden als Text nachgeführt; Einträge in «Neue Bilder» bleiben (samt geladenem Bild) stehen.
+  let geruest = null;              // { schluessel, kopfEl, rasterEl, bilderEl, kacheln: Map(nr -> Kachel), eintraege: Map(id -> li), kopfSig }
+  const setzeText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+
   function vorschau(k) {
     const { welt, ebene, raster } = zeichneWelt(sitzung.zonen);
     for (const e of reihenfolge(k.elemente)) ebene.append(zeichneElement(e));
     const box = h('div', { class: 'tu-vorschau' }, welt);
     box.style.aspectRatio = `${raster.b} / ${raster.h}`;
-    boxen.push({ box, welt, raster });
-    return box;
+    return { box, welt, raster };
   }
   function skaliere() {
-    for (const { box, welt, raster } of boxen) welt.style.transform = `scale(${(box.clientWidth || 1) / raster.b})`;
+    if (!geruest) return;
+    for (const { vor } of geruest.kacheln.values()) vor.welt.style.transform = `scale(${(vor.box.clientWidth || 1) / vor.raster.b})`;
   }
 
-  function kachel(k) {
+  function neueKachel(k) {
+    const vor = vorschau(k);
+    const stand = h('span', { class: 'tu-stand' }), online = h('p', { class: 'tu-online' }), namen = h('p', { class: 'tu-namen' });
+    const el = h('a', { class: 'tu-kachel', href: `#/tafel/${code}/${k.nr}` }, vor.box,
+      h('div', { class: 'tu-kachelkopf' }, h('h3', null, k.name), stand), online, namen);
+    return { el, vor, stand, online, namen, elemente: k.elemente };
+  }
+  function fuehreKachel(kachel, k) {
     const abgegeben = k.stand === 'abgegeben';
-    return h('a', { class: 'tu-kachel' + (abgegeben ? ' abgegeben' : ''), href: `#/tafel/${code}/${k.nr}` },
-      vorschau(k),
-      h('div', { class: 'tu-kachelkopf' },
-        h('h3', null, k.name),
-        h('span', { class: 'tu-stand' + (abgegeben ? ' abgegeben' : '') }, T(abgegeben ? 'tu.abgegeben' : 'tu.arbeitet'))),
-      h('p', { class: 'tu-online' + (k.online ? ' an' : '') }, T('tu.online', { n: k.online })),
-      h('p', { class: 'tu-namen' }, k.namen.length ? k.namen.join(', ') : T('tu.keineMitglieder')));
+    kachel.el.classList.toggle('abgegeben', abgegeben);
+    kachel.stand.classList.toggle('abgegeben', abgegeben);
+    setzeText(kachel.stand, T(abgegeben ? 'tu.abgegeben' : 'tu.arbeitet'));
+    kachel.online.classList.toggle('an', k.online > 0);
+    setzeText(kachel.online, T('tu.online', { n: k.online }));
+    setzeText(kachel.namen, k.namen.length ? k.namen.join(', ') : T('tu.keineMitglieder'));
+    if (!gleicheListe(kachel.elemente, k.elemente)) {
+      const neu = vorschau(k);
+      kachel.vor.box.replaceWith(neu.box);
+      kachel.vor = neu;
+      kachel.elemente = k.elemente;
+    }
   }
 
   function beitrittsKachel() {
@@ -86,6 +104,12 @@ export function zeige(wurzel, ctx, code) {
     return h('button', { type: 'button', class: 'knopf klein leise' + (gefahr ? ' gefahr' : ''), onclick, disabled: aus, title: titel || null }, text);
   }
 
+  // Vertrag des Hakens: ctx.exportHtml(code, gruppe). gruppe === null = alle Gruppen (nur die Leitung), eine Zahl = nur diese Gruppe.
+  // Ein abgelehntes Versprechen erscheint als Meldung.
+  function exportiere() {
+    try { Promise.resolve(ctx.exportHtml(code, null)).catch(melde); } catch (e) { melde(e); }
+  }
+
   function kopf() {
     const beendet = sitzung.status !== 'offen';
     const alleGesperrt = sitzung.gruppen.every((_, i) => (sitzung.gesperrt || []).includes(i));
@@ -99,7 +123,7 @@ export function zeige(wurzel, ctx, code) {
         knopf(T('tu.sperren'), sperren, { aus: beendet || alleGesperrt }),
         knopf(T('tu.pdf'), () => ctx.geh(`#/tafel/${code}/druck`)),
         typeof ctx.exportHtml === 'function'
-          ? knopf(T('tu.html'), () => ctx.exportHtml(code, null))
+          ? knopf(T('tu.html'), exportiere)
           : knopf(T('tu.html'), null, { aus: true, titel: T('brett.spaeter') }),
         knopf(T('tu.praesentieren') + (praesentieren ? ' ▴' : ' ▾'), () => { praesentieren = !praesentieren; zeichne(); }),
         h('span', { class: 'tbr-platz' }),
@@ -111,44 +135,70 @@ export function zeige(wurzel, ctx, code) {
         sitzung.gruppen.map((name, i) => h('a', { class: 'chip', href: `#/tafel/${code}/${i}/zeigen` }, name))) : null);
   }
 
-  function bilderListe() {
+  function eintrag(e) {
+    const bild = h('img', { alt: '', draggable: 'false' });
+    if (e.bildPfad) bilder.bildUrl(e.bildPfad).then(url => { if (url && !zu) bild.src = url; });
+    return h('li', null,
+      h('div', { class: 'tu-bildvorschau' }, bild),
+      h('div', { class: 'tu-bildtext' }, h('b', null, sitzung.gruppen[e.gruppe] ?? '?'), h('span', null, e.vonName || '')),
+      h('button', { type: 'button', class: 'knopf klein leise gefahr', onclick: () => bildLoeschen(e) }, T('brett.loeschen')));
+  }
+  function fuehreBilder() {
     const alle = neueBilder(elemente);
     const sichtbar = alle.slice(0, bilderAnzahl);
-    return h('section', { class: 'tu-bilder' },
-      h('h2', null, T('tu.neueBilder'), alle.length ? ` (${alle.length})` : ''),
-      alle.length ? null : h('p', { class: 'tu-hilfe' }, T('tu.keineBilder')),
-      h('ul', null, sichtbar.map(e => {
-        const bild = h('img', { alt: '', draggable: 'false' });
-        if (e.bildPfad) bilder.bildUrl(e.bildPfad).then(url => { if (url && !zu) bild.src = url; });
-        return h('li', null,
-          h('div', { class: 'tu-bildvorschau' }, bild),
-          h('div', { class: 'tu-bildtext' },
-            h('b', null, sitzung.gruppen[e.gruppe] ?? '?'),
-            h('span', null, e.vonName || '')),
-          h('button', { type: 'button', class: 'knopf klein leise gefahr', onclick: () => bildLoeschen(e) }, T('brett.loeschen')));
-      })),
-      alle.length > sichtbar.length
-        ? h('button', { type: 'button', class: 'knopf klein leise', onclick: () => { bilderAnzahl += BILDER_SEITE; zeichne(); } }, T('tu.mehr'))
-        : null);
+    const { bilderEl, eintraege } = geruest;
+    const kopfEl = bilderEl.querySelector('h2'), leerEl = bilderEl.querySelector('.tu-hilfe'), liste = bilderEl.querySelector('ul'), mehr = bilderEl.querySelector('.tu-mehr');
+    setzeText(kopfEl, T('tu.neueBilder') + (alle.length ? ` (${alle.length})` : ''));
+    leerEl.hidden = alle.length > 0;
+    const da = new Set(sichtbar.map(e => e.id));
+    for (const [id, li] of eintraege) if (!da.has(id)) { li.remove(); eintraege.delete(id); }
+    for (const e of sichtbar) if (!eintraege.has(e.id)) eintraege.set(e.id, eintrag(e));
+    // Reihenfolge nur anfassen, wenn sie nicht stimmt; vorhandene Einträge werden verschoben, nicht neu gebaut.
+    const soll = sichtbar.map(e => eintraege.get(e.id));
+    if (soll.some((li, i) => liste.children[i] !== li) || liste.children.length !== soll.length) liste.replaceChildren(...soll);
+    mehr.hidden = alle.length <= sichtbar.length;
   }
 
   function hinweis(text, link = true) {
+    geruest = null;
     ziel.replaceChildren(h('div', { class: 'tu-leer' }, h('p', null, text),
       link ? h('a', { class: 'knopf leise', href: '#/studio' }, T('tu.zumStudio')) : null));
   }
 
+  function baueGeruest() {
+    const bilderEl = h('section', { class: 'tu-bilder' },
+      h('h2'),
+      h('p', { class: 'tu-hilfe' }, T('tu.keineBilder')),
+      h('ul'),
+      h('button', { type: 'button', class: 'knopf klein leise tu-mehr', onclick: () => { bilderAnzahl += BILDER_SEITE; fuehreBilder(); } }, T('tu.mehr')));
+    const rasterEl = h('div', { class: 'tu-raster' }, beitrittsKachel());
+    geruest = { schluessel: JSON.stringify([sitzung.gruppen, sitzung.zonen]), kopfEl: null, rasterEl, bilderEl, kacheln: new Map(), eintraege: new Map(), kopfSig: '' };
+    const jetzt = store.jetzt ? store.jetzt() : Date.now();
+    for (const k of kacheln(sitzung, mitglieder, elemente, jetzt)) {
+      const kachel = neueKachel(k);
+      geruest.kacheln.set(k.nr, kachel);
+      rasterEl.append(kachel.el);
+    }
+    ziel.replaceChildren(h('main', { class: 'tu-inhalt' }, rasterEl, bilderEl));
+  }
+
   function zeichne() {
     if (zu) return;
-    boxen = [];
     document.documentElement.lang = ctx.sprache;
     if (konto === undefined || sitzung === undefined) { hinweis(T('allg.laedt'), false); return; }
     if (sitzung === null) { hinweis(T('tu.weg')); return; }
     if (!konto || sitzung.hostUid !== konto.uid) { hinweis(T('tu.fremd')); return; }
+    if (!geruest || geruest.schluessel !== JSON.stringify([sitzung.gruppen, sitzung.zonen])) baueGeruest();
+    // Kopf nur neu, wenn sich etwas ändert, das er zeigt.
+    const sig = JSON.stringify([sitzung.titel, sitzung.status, sitzung.gesperrt, sitzung.gruppen, praesentieren, ctx.sprache, typeof ctx.exportHtml]);
+    if (sig !== geruest.kopfSig) {
+      const neu = kopf();
+      if (geruest.kopfEl) geruest.kopfEl.replaceWith(neu); else ziel.prepend(neu);
+      geruest.kopfEl = neu; geruest.kopfSig = sig;
+    }
     const jetzt = store.jetzt ? store.jetzt() : Date.now();
-    ziel.replaceChildren(kopf(),
-      h('main', { class: 'tu-inhalt' },
-        h('div', { class: 'tu-raster' }, beitrittsKachel(), kacheln(sitzung, mitglieder, elemente, jetzt).map(kachel)),
-        bilderListe()));
+    for (const k of kacheln(sitzung, mitglieder, elemente, jetzt)) fuehreKachel(geruest.kacheln.get(k.nr), k);
+    fuehreBilder();
     skaliere();
   }
   const zeichneBald = () => { if (bald === null && !zu) bald = setTimeout(() => { bald = null; zeichne(); }, NEU_ZEICHNEN_MS); };

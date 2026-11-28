@@ -1,5 +1,6 @@
 // Whiteboard: reine Hilfen der Übersicht der Lehrperson (Kacheln, «Neue Bilder», Beitrittsadresse), ohne Oberfläche.
 import { istOnline } from './tafel.js';
+import { gleicheElemente } from './tafelbrett.js';
 
 /** «123456» -> «123 456». */
 export const codeText = code => String(code).replace(/^(\d{3})(\d+)$/, '$1 $2');
@@ -32,4 +33,11 @@ export function kacheln(sitzung, mitglieder, elemente, jetzt) {
       elemente: (elemente || []).filter(e => e && e.gruppe === nr),
     };
   });
+}
+
+/** Gleiche Elemente (nach Kennung), Reihenfolge egal? Damit baut die Übersicht eine Vorschau nur bei echter Änderung neu. */
+export function gleicheListe(a, b) {
+  if (a.length !== b.length) return false;
+  const nachId = new Map(b.map(e => [e.id, e]));
+  return a.every(e => nachId.has(e.id) && gleicheElemente(e, nachId.get(e.id)));
 }
