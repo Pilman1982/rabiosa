@@ -784,6 +784,12 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         });
         if (e.bildPfad) { tafelBilder.delete(e.bildPfad); await dateiLoeschen(e.bildPfad); }
       },
+      /** Einmaliges Lesen aller Zähler (eine Zeile je Gruppe, nach Nummer); lesen darf nur die Leitung (Regeln). */
+      async zaehlerLesen(code) {
+        await brauchtKonto();
+        const snap = await versuche(() => getDocs(zaehlerListe(code)));
+        return snap.docs.sort((x, y) => Number(x.id) - Number(y.id)).map(d => zaehlerAus(d.data()));
+      },
       zaehlerBeobachten: (code, gruppe, cb) => lausche(zaehlerRef(code, gruppe), snap => zaehlerAus(snap.exists() ? snap.data() : null), cb),
       async bildHochladen(code, roh, blob) {
         const e = saeubereElement({ ...roh, art: 'bild' });

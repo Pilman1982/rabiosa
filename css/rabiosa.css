@@ -949,3 +949,16 @@ body[data-ansicht="tafeldruck"] { background: #e8e5df; }
   .tdr-blaetter { display: block; padding: 0; }
   .tdr-blatt { zoom: 1; box-shadow: none; break-before: page; break-inside: avoid; page: tafeldruck; }
 }
+
+/* Whiteboard: Ergebnisse im Studio (#/studio/tafeln/ID) */
+.terg-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.terg-zeile { background: #fff; border-radius: 14px; padding: 16px 20px; box-shadow: 0 2px 10px #0014361a; color: var(--navy); display: grid; gap: 10px; }
+.terg-daten { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+.terg-datum { font-weight: 600; }
+.terg-code { font-family: var(--serif); font-size: 20px; letter-spacing: .06em; }
+.terg-daten span { color: var(--text-leise); font-size: 14px; }
+.terg-stand { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; background: #e0eef2; color: var(--petrol); }
+.terg-stand.beendet { background: #e3e7ee; color: var(--navy); }
+.terg-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.terg-waehlen { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; }
+.terg-waehlen[hidden] { display: none; }

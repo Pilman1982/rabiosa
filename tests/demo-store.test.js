@@ -290,3 +290,19 @@ test('Tafel: fremde Gruppe sieht und ändert nichts, Leitung sieht alles', async
   assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e2', gruppe: 0, art: 'zettel', x: 0, y: 0 })), 'verboten', 'fremdes Element nicht übernehmen');
   assert.throws(() => g0.tafel.mitgliederBeobachten(code, null, () => {}), { code: 'verboten' });
 });
+
+test('Tafel: zaehlerLesen liefert alle Gruppen einmalig, nur der Leitung; Löschen räumt Bilder und Zähler weg, andere Sitzung bleibt', async () => {
+  const { store, daten, code, gast } = await tafelMitLeitung();
+  const zweite = await store.tafel.erstellen(sitzungAusVorlage({ ...beispielTafel('de'), id: 'q1' }, ['A', 'B'], 'IGNORIERT'));
+  const a = await store.tafel.bildHochladen(code, { id: 'a1', gruppe: 0, art: 'bild', x: 0, y: 0, b: 10, h: 10 }, klein());
+  const b = await store.tafel.bildHochladen(zweite, { id: 'b1', gruppe: 1, art: 'bild', x: 0, y: 0, b: 10, h: 10 }, klein());
+  assert.deepEqual(await store.tafel.zaehlerLesen(code), [{ bilder: 1, bytes: 1, letztes: 'a1' }, { bilder: 0, bytes: 0, letztes: '' }]);
+  assert.equal(await fehlerCode(gast('fremd').tafel.zaehlerLesen(code)), 'verboten');
+  assert.equal((await store.tafel.meine('q1')).length, 2);
+  await store.tafel.loeschen(code);
+  const da = pfad => [...daten.keys()].some(k => k.endsWith('tafelbild:' + pfad));
+  assert.equal(da(a.bildPfad), false, 'Bild der gelöschten Sitzung weg');
+  assert.equal(da(b.bildPfad), true, 'Bild der anderen bleibt');
+  assert.deepEqual((await store.tafel.meine('q1')).map(s => s.code), [zweite]);
+  assert.equal(await store.tafel.nachsehen(code), null);
+});

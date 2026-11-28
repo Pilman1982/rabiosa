@@ -376,6 +376,11 @@ export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, j
         }
         meldeTafel(code, ':elemente');
       },
+      /** Einmaliges Lesen aller Zähler (eine Zeile je Gruppe, nach Nummer), nur für die Leitung. */
+      async zaehlerLesen(code) {
+        nurLeitung(code);
+        return Object.entries(zaehlerAlle(code)).sort((x, y) => x[0] - y[0]).map(([, z]) => z);
+      },
       zaehlerBeobachten: (code, gruppe, cb) => beobachte(`tafel:${code}:zaehler:${gruppe}`, () => {
         if (!leseRecht(code, gruppe)) return null;
         return zaehlerAlle(code)[gruppe] ?? { bilder: 0, bytes: 0, letztes: '' };

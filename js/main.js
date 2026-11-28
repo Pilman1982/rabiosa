@@ -35,6 +35,7 @@ const ANSICHTEN = {
   folieneditor: () => import('./ansicht/folieneditor.js'),
   tafeleditor: () => import('./ansicht/tafeleditor.js'),
   tafelbeitritt: () => import('./ansicht/tafelbeitritt.js'),
+  tafelergebnisse: () => import('./ansicht/tafelergebnisse.js'),
   tafelbrett: () => import('./ansicht/tafelbrett.js'),
   tafeluebersicht: () => import('./ansicht/tafeluebersicht.js'),
   tafelzeigen: () => import('./ansicht/tafelzeigen.js'),
