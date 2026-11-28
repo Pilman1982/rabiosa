@@ -2,6 +2,7 @@
 import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN, vorgeschlageneOrdner } from '../ui.js';
 import { t } from '../i18n.js';
 import { FOLIEN, WORTE_MAX, neueFolie, folienFehler, oeffentlicheFolie, istPraesentation } from '../logik/praesentation.js';
+import { editorAdresse } from '../logik/ablage.js';
 import { verkleinere } from './editor.js';
 import { zeichneFolie as folieBild } from './folien.js';
 
@@ -216,7 +217,7 @@ export function zeige(wurzel, ctx, quizId) {
     try {
       const q = await store.quiz.laden(quizId);
       if (q.besitzer !== konto.uid) { ctx.geh('#/studio'); return; }
-      if (!istPraesentation(q)) { ctx.geh('#/studio/quiz/' + quizId); return; }
+      if (!istPraesentation(q)) { ctx.geh(editorAdresse(q, quizId)); return; }   // Quiz oder Whiteboard: passender Editor
       if (abgebaut) return;
       p = JSON.parse(JSON.stringify(q));
       zeichneAlles();

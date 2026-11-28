@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { megabyte, speicherSumme, zeilenStand } from '../js/logik/tafelergebnisse.js';
+import { megabyte, speicherSumme, zeilenStand, ergebnisTitel } from '../js/logik/tafelergebnisse.js';
 
 test('megabyte: eine Dezimalstelle, Komma auf Deutsch, Punkt auf Englisch', () => {
   assert.equal(megabyte(0, 'de'), '0,0');
@@ -21,4 +21,11 @@ test('zeilenStand: offen/beendet, Gruppenzahl, Code mit Leerzeichen', () => {
     { code: '123456', codeText: '123 456', offen: true, gruppen: 2, erstellt: 5 });
   assert.equal(zeilenStand({ code: '1', status: 'beendet', gruppen: [] }).offen, false);
   assert.equal(zeilenStand({ code: '1' }).gruppen, 0);
+});
+
+test('ergebnisTitel: Titel der Vorlage, sonst der Titel aus einer Sitzung, sonst der Ersatz (Schlussprüfung 2)', () => {
+  assert.equal(ergebnisTitel({ titel: 'Mise en place' }, [{ titel: 'alt' }], 'Ergebnisse'), 'Mise en place');
+  assert.equal(ergebnisTitel(null, [{ code: '1' }, { titel: 'Aus der Sitzung' }], 'Ergebnisse'), 'Aus der Sitzung', 'Vorlage gelöscht oder nicht mehr freigegeben');
+  assert.equal(ergebnisTitel(null, [], 'Ergebnisse'), 'Ergebnisse');
+  assert.equal(ergebnisTitel({ titel: '' }, undefined, 'Ergebnisse'), 'Ergebnisse');
 });

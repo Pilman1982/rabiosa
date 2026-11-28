@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX, quelleMerken, alleVerschieben } from '../js/logik/ablage.js';
+import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX, quelleMerken, alleVerschieben, editorAdresse } from '../js/logik/ablage.js';
 
 const q = (titel, fach, ordner, mehr = {}) => ({ id: titel, titel, fach, ordner, autor: 'Anna Muster', fragen: [], ...mehr });
 
@@ -194,4 +194,12 @@ test('alleVerschieben: macht nach einem Fehler weiter und zählt die Fehler', as
 
 test('alleOrdner: «Ohne Fach» ist immer als Ziel dabei', () => {
   assert.deepEqual(alleOrdner([q('A', 'KUT', '')], [], 'Ohne Fach'), [['KUT'], ['Ohne Fach']]);
+});
+
+test('editorAdresse: jede Art in ihrem Editor; ein Whiteboard nie im Quiz- oder Folieneditor (Schlussprüfung 4)', () => {
+  assert.equal(editorAdresse({ id: 'a1', art: 'whiteboard' }), '#/studio/whiteboard/a1');
+  assert.equal(editorAdresse({ id: 'a2', art: 'praesentation' }), '#/studio/folien/a2');
+  assert.equal(editorAdresse({ id: 'a3', art: 'quiz' }), '#/studio/quiz/a3');
+  assert.equal(editorAdresse({ id: 'a4' }), '#/studio/quiz/a4', 'ohne Art: Quiz');
+  assert.equal(editorAdresse({ art: 'whiteboard' }, 'x9'), '#/studio/whiteboard/x9', 'Kennung aus der Adresse');
 });

@@ -3,6 +3,7 @@ import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN, vorgeschlageneOr
 import { t } from '../i18n.js';
 import { TYPEN, ZEIT_WAHL, neueFrage, quizFehler, zufallsId, clocheFelder, zuVieleFuerEcken, THEMA_MAX } from '../logik/quiz.js';
 import { leseZahl } from '../logik/pruefen.js';
+import { editorAdresse } from '../logik/ablage.js';
 
 const BILD_MAX_ZEICHEN = 900000;   // als Text gespeichert; entspricht rund 675 KB
 
@@ -251,7 +252,9 @@ export function zeige(wurzel, ctx, quizId) {
     try {
       const q = await store.quiz.laden(quizId);
       if (q.besitzer !== konto.uid) { ctx.geh('#/studio'); return; }
-      if (q.art === 'praesentation') { ctx.geh('#/studio/folien/' + quizId); return; }
+      // Präsentation oder Whiteboard: in den passenden Editor, bevor hier etwas gespeichert wird.
+      const ziel = editorAdresse(q, quizId);
+      if (ziel !== '#/studio/quiz/' + quizId) { ctx.geh(ziel); return; }
       if (abgebaut) return;
       quiz = JSON.parse(JSON.stringify(q));
       zeichneAlles();

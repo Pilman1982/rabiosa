@@ -245,7 +245,19 @@ export function zeige(wurzel, ctx) {
         h('a', { class: 'knopf klein leise', href: rueckblickLink(q) }, rueckblickText(q)),
         kleinerKnopf(T('studio.verschieben'), () => verschiebenDialog(q)),
         kleinerKnopf(T('studio.duplizieren'), () => tue(() => kopiereQuiz(store, q, `${titel} (${T('studio.kopie')})`))),
-        kleinerKnopf(T('studio.loeschen'), async () => { if (await rueckfrage(s(), T('studio.loeschenFrage', { titel }), T('studio.loeschen'))) tue(() => store.quiz.loeschen(q.id)); }, 'leise gefahr')));
+        kleinerKnopf(T('studio.loeschen'), () => vorlageLoeschen(q, titel), 'leise gefahr')));
+  }
+
+  /**
+   * Löschen einer Vorlage. Ein Whiteboard mit Sitzungen: Die Rückfrage nennt ihre Anzahl; die Sitzungen bleiben (mit
+   * ihren Bildern im Speicher) und die Ergebnisse öffnen sich danach, damit man sie dort löschen kann.
+   */
+  async function vorlageLoeschen(q, titel) {
+    let n = 0;
+    if (istWhiteboard(q)) { try { n = (await store.tafel.meine(q.id)).length; } catch { n = 0; } }
+    const frage = n ? T('studio.loeschenFrageTafel', { titel, n }) : T('studio.loeschenFrage', { titel });
+    if (!(await rueckfrage(s(), frage, T('studio.loeschen')))) return;
+    tue(async () => { await store.quiz.loeschen(q.id); if (n) ctx.geh('#/studio/tafeln/' + q.id); }, !n);
   }
 
   const ablageort = q => h('p', { class: 'ablageort' }, pfadVon(q, T('studio.ohneFach')).join(' › '));
@@ -259,7 +271,8 @@ export function zeige(wurzel, ctx) {
       mitOrt ? ablageort(q) : null,
       h('div', { class: 'kartenknoepfe' },
         startKnoepfe(q),
-        istWhiteboard(q) ? null : h('a', { class: 'knopf klein leise', href: rueckblickLink(q) }, rueckblickText(q)),
+        // Ergebnisse auch bei Whiteboards: Die Liste zeigt nur die eigenen Sitzungen (meine() nach hostUid).
+        h('a', { class: 'knopf klein leise', href: rueckblickLink(q) }, rueckblickText(q)),
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
 

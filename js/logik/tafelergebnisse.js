@@ -21,3 +21,8 @@ export const zeilenStand = s => ({
   code: s.code, codeText: codeText(s.code), offen: s.status === 'offen',
   gruppen: Array.isArray(s.gruppen) ? s.gruppen.length : 0, erstellt: s.erstellt,
 });
+
+/** Überschrift der Ergebnisse: Titel der Vorlage; ist sie weg (gelöscht, nicht mehr freigegeben), der aus einer Sitzung. */
+export function ergebnisTitel(vorlage, sitzungen, ersatz) {
+  return (vorlage && vorlage.titel) || (Array.isArray(sitzungen) ? sitzungen.find(x => x && x.titel)?.titel : '') || ersatz;
+}

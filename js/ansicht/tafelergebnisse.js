@@ -1,15 +1,18 @@
 // Whiteboard: Ergebnisse einer Vorlage im Studio unter #/studio/tafeln/ID. Alle eigenen Sitzungen dieser Vorlage,
 // neueste zuerst: Datum, Code, Gruppen, offen/beendet, Speicher. Knöpfe: Öffnen, Präsentieren, PDF, HTML, Beenden/Wieder öffnen, Löschen.
 // Nur für die angemeldete, freigeschaltete Lehrperson. Den Speicher je Sitzung liest store.tafel.zaehlerLesen einmalig.
+// Ist die Vorlage weg (gelöscht oder im Kollegium nicht mehr freigegeben), erscheinen die Sitzungen trotzdem, mit dem
+// Titel aus der Sitzung: Sonst blieben sie samt Bildern unerreichbar im Speicher.
 import { h, marke, meldung, fehlerText, rueckfrage, datum } from '../ui.js';
 import { t } from '../i18n.js';
-import { megabyte, speicherSumme, zeilenStand } from '../logik/tafelergebnisse.js';
+import { megabyte, speicherSumme, zeilenStand, ergebnisTitel } from '../logik/tafelergebnisse.js';
 
 export function zeige(wurzel, ctx, vorlageId) {
   const { store } = ctx;
   const s = ctx.sprache;
   const T = (k, w) => t(s, k, w);
   let zu = false, gestartet = false;
+  let vorlage = null;              // null: gelöscht oder nicht (mehr) freigegeben; die Sitzungen erscheinen trotzdem
   const melde = e => meldung(fehlerText(s, e));
   const offeneWahl = new Set();    // Codes, bei denen die Gruppenwahl für «Präsentieren» offen ist
 
@@ -20,8 +23,9 @@ export function zeige(wurzel, ctx, vorlageId) {
       h('a', { class: 'knopf leise klein', href: '#/studio' }, T('terg.zumStudio'))),
     inhalt));
 
-  const hinweis = (text, mitLink = false) => inhalt.replaceChildren(h('p', { class: 'leer' }, text),
-    mitLink ? h('a', { class: 'knopf leise', href: '#/studio' }, T('terg.zumStudio')) : null);
+  // replaceChildren nimmt null als Text «null»: nur echte Knoten übergeben.
+  const hinweis = (text, mitLink = false) => inhalt.replaceChildren(...[h('p', { class: 'leer' }, text),
+    mitLink ? h('a', { class: 'knopf leise', href: '#/studio' }, T('terg.zumStudio')) : null].filter(Boolean));
 
   async function schreibe(code, patch) {
     try { await store.tafel.aktualisieren(code, patch); } catch (e) { melde(e); }
@@ -78,17 +82,16 @@ export function zeige(wurzel, ctx, vorlageId) {
     try {
       const liste = await store.tafel.meine(vorlageId);
       if (zu) return;
-      if (!liste.length) { hinweis(T('terg.leer')); return; }
-      inhalt.replaceChildren(h('ul', { class: 'terg-liste' }, liste.map(zeile)));
+      titelEl.textContent = ergebnisTitel(vorlage, liste, T('terg.titel'));
+      if (!liste.length) { hinweis(T(vorlage ? 'terg.leer' : 'terg.weg'), !vorlage); return; }
+      inhalt.replaceChildren(...[vorlage ? null : h('p', { class: 'hilfe' }, T('terg.ohneVorlage')),
+        h('ul', { class: 'terg-liste' }, liste.map(zeile))].filter(Boolean));
     } catch (e) { if (!zu) inhalt.replaceChildren(h('p', { class: 'fehler' }, fehlerText(s, e))); }
   }
 
   async function starte() {
-    let vorlage = null;
     try { vorlage = await store.quiz.laden(vorlageId); } catch { vorlage = null; }
     if (zu) return;
-    if (!vorlage) { hinweis(T('terg.weg'), true); return; }
-    titelEl.textContent = vorlage.titel || T('terg.titel');
     await lade();
   }
 

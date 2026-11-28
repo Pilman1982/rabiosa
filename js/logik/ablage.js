@@ -97,6 +97,10 @@ export function bekannteOrdner(quizze) {
 /** Ein Inhalt ohne gültiges Feld «art» ist ein Quiz (so war es vor der Präsentation). */
 export const artVon = quiz => (ARTEN.includes(quiz?.art) ? quiz.art : 'quiz');
 
+const EDITOR = { quiz: '#/studio/quiz/', praesentation: '#/studio/folien/', whiteboard: '#/studio/whiteboard/' };
+/** Adresse des Editors, der zu dieser Art passt. Ein falscher Editor würde beim automatischen Speichern beschädigen. */
+export const editorAdresse = (quiz, id = quiz?.id) => EDITOR[artVon(quiz)] + id;
+
 /** Nur die Inhalte einer Art; «alle» lässt alles durch. Die Reihenfolge bleibt. */
 export const nachArt = (quizze, art) => quizze.filter(q => art === 'alle' || artVon(q) === art);
 
