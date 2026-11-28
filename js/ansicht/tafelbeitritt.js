@@ -3,12 +3,13 @@
 import { h, marke, fehlerText } from '../ui.js';
 import { t } from '../i18n.js';
 import { NAME_MAX } from '../logik/tafel.js';
+import { zeigeBrett } from './tafelbrett.js';
 
 export function zeige(wurzel, ctx, code) {
   const { store } = ctx;
   let sitzung;                 // undefined = lädt, null = gibt es nicht, sonst die Sitzung
   let ich;                     // undefined = noch unbekannt, null = noch nicht beigetreten, sonst das Mitglied
-  let gastFehler = null, gezeichnet = '', zu = false;
+  let gastFehler = null, gezeichnet = '', zu = false, abbauBrett = null;
 
   const sprache = () => (sitzung && sitzung.sprache) || ctx.sprache;
   const T = (k, w) => t(sprache(), k, w);
@@ -18,11 +19,11 @@ export function zeige(wurzel, ctx, code) {
   const mitte = (...inhalt) => h('div', { class: 'mitte' }, inhalt);
   const hinweisSeite = text => seite(mitte(h('p', { class: 'stark' }, text), h('a', { class: 'knopf leise', href: '#/' }, T('ende.zurueck'))));
 
-  // Hier setzt Task 6 an: zeigeBrett(ziel, ctx, { code, gruppe, rolle: 'gast' }) ersetzt den Platzhalter.
+  // Das Board der eigenen Gruppe; es beobachtet Sitzung, Mitglieder und Elemente selbst.
   function brettSeite() {
-    return seite(mitte(h('div', { class: 'haken' }, '✓'),
-      h('h2', null, T('tb.drin', { gruppe: sitzung.gruppen[ich.gruppe] ?? '' })),
-      h('p', null, T('tb.als', { name: ich.name }))));
+    const ziel = h('div', { class: 'tbr-wurzel' });
+    abbauBrett = zeigeBrett(ziel, ctx, { code, gruppe: ich.gruppe, rolle: 'gast' });
+    return ziel;
   }
 
   function wahlSeite() {
@@ -72,6 +73,8 @@ export function zeige(wurzel, ctx, code) {
     else { kennung = 'wahl'; baue = wahlSeite; }
     if (kennung === gezeichnet) return;   // gleiche Ansicht: Eingaben bleiben stehen
     gezeichnet = kennung;
+    abbauBrett?.();
+    abbauBrett = null;
     document.documentElement.lang = sprache();
     wurzel.replaceChildren(baue());
   }
@@ -94,5 +97,5 @@ export function zeige(wurzel, ctx, code) {
   })();
   zeichne();
 
-  return () => { zu = true; stoppSitzung(); stoppIch(); };
+  return () => { zu = true; stoppSitzung(); stoppIch(); abbauBrett?.(); };
 }
