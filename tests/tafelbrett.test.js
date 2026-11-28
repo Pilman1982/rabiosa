@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import {
   DICKE, neueKennung, zuBrett, einpassen, zoome, huelle, strichAus, rechteckAus, linieAus, verschiebe, skaliere,
   getroffen, reihenfolge, zVorn, zHinten, pfeilSpitze, erstelleDrossel, kurzname, istFremdBearbeitet, gleicheElemente,
@@ -149,4 +150,17 @@ test('gleicheElemente: Reihenfolge der Felder egal, undefined zählt wie fehlend
   assert.equal(gleicheElemente({ b: { uid: 'u', name: 'A' } }, { b: { name: 'A', uid: 'u' } }), true);
   assert.equal(gleicheElemente(a, null), false);
   assert.equal(gleicheElemente(null, null), true);
+});
+
+test('strichAus: Toleranz 0 (Vorschau) mit über 1000 gebogenen Punkten endet rasch und hält PUNKTE_MAX ein', () => {
+  // In einem eigenen Prozess mit Zeitlimit: Eine Endlosschleife darf die Testreihe nicht aufhängen.
+  const modul = new URL('../js/logik/tafelbrett.js', import.meta.url).href;
+  const code = `import { strichAus } from ${JSON.stringify(modul)};
+    const p = []; for (let i = 0; i < 1100; i++) p.push(Math.cos(i / 50) * 500 + i, Math.sin(i / 37) * 300);
+    const s = strichAus(p, 0); console.log(JSON.stringify({ n: s.punkte.length, ok: s.punkte.every(Number.isFinite) }));`;
+  const lauf = spawnSync(process.execPath, ['--input-type=module', '-e', code], { timeout: 5000, encoding: 'utf8' });
+  assert.equal(lauf.error?.code, undefined, 'strichAus hängt (Zeitlimit überschritten)');
+  assert.equal(lauf.status, 0, lauf.stderr);
+  const { n, ok } = JSON.parse(lauf.stdout);
+  assert.ok(n <= PUNKTE_MAX && n % 2 === 0 && ok, String(n));
 });

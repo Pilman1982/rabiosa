@@ -52,7 +52,8 @@ export function strichAus(absolut, toleranz = 2) {
   let p = absolut.length >= 2 ? absolut.slice(0, absolut.length - (absolut.length % 2)) : [0, 0];
   if (p.length === 2) p = [p[0], p[1], p[0], p[1]];   // ein Klick: ein Punkt
   let v = vereinfache(p, toleranz);
-  for (let tol = toleranz * 2; v.length > PUNKTE_MAX && tol < 1e6; tol *= 2) v = vereinfache(p, tol);
+  // Mit positivem Anfang, sonst bliebe die Toleranz bei 0 (Vorschau) stehen und die Schleife endete nie.
+  for (let tol = Math.max(toleranz * 2, 0.5); v.length > PUNKTE_MAX && tol < 1e6; tol *= 2) v = vereinfache(p, tol);
   if (v.length > PUNKTE_MAX) v = [...v.slice(0, PUNKTE_MAX - 2), ...v.slice(-2)];
   const r = huelle(v);
   return { x: runde(r.x), y: runde(r.y), b: runde(r.b), h: runde(r.h), punkte: relativ(v, r.x, r.y) };
