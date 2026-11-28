@@ -298,6 +298,21 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
 .ordner:hover, .ordner:focus-visible { border-color: var(--kupfer); }
 .ordnerbild { width: 24px; height: 24px; color: var(--kupfer); flex: none; }
 .ordnername { flex: 1; overflow-wrap: anywhere; }
+/* Studio-Ordnung: Neu-Menü, Arten, Zuletzt bearbeitet */
+.neumenue { position: relative; }
+.neumenue summary { list-style: none; cursor: pointer; }
+.neumenue summary::-webkit-details-marker { display: none; }
+.neumenue summary::after { content: ' ▾'; }
+.neuliste { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 260px; background: #fff; border-radius: 12px; box-shadow: 0 6px 24px #00143633; padding: 6px; display: flex; flex-direction: column; }
+.neueintrag { border: 0; background: transparent; text-align: left; padding: 10px 14px; border-radius: 8px; font-weight: 600; color: var(--navy); }
+.neueintrag:hover, .neueintrag:focus-visible { background: var(--papier); }
+.artenleiste { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.artknopf { border: 1.5px solid var(--linie); background: #fff; color: var(--navy); border-radius: 99px; padding: 5px 14px; font-size: 14px; font-weight: 600; }
+.artknopf.an { background: var(--navy); border-color: var(--navy); color: #fff; }
+.karten.zuletzt { margin-bottom: 8px; }
+.etikett.art.quiz { background: #e3e7ee; color: var(--navy); }
+.etikett.art.praesentation { background: #e0eef2; color: var(--petrol); }
+.etikett.art.whiteboard { background: #fbe9e2; color: var(--kupfer-dunkel); }
 .ordnerzahl { font-size: 12.5px; color: var(--text-leise); background: var(--papier); border-radius: 99px; padding: 2px 9px; }
 .trefferzahl { font-size: 13.5px; color: var(--text-leise); margin: 0 0 12px; }
 .karte .ablageort { font-size: 12.5px; color: var(--kupfer-dunkel); margin: 0; overflow-wrap: anywhere; }

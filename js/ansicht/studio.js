@@ -4,7 +4,7 @@ import { t } from '../i18n.js';
 import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
 import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
-import { inhaltVon, suche, pfadVon, ordnerTeile, bekannteOrdner } from '../logik/ablage.js';
+import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, leereAufraeumen, ARTEN } from '../logik/ablage.js';
 import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
@@ -27,7 +27,10 @@ export function zeige(wurzel, ctx) {
   let konto;                      // undefined = lädt
   let reiter = 'meine';
   let meine = null, kollegium = null;
-  let pfad = [], anfrage = '';    // Ablage der Freigaben: geöffneter Ordner und Suchtext
+  let leere = [];                 // eigene leere Ordner { fach, ordner }
+  // Pro Reiter: geöffneter Ordner (Fach zuerst) und Suchtext. Die gewählte Art gilt für beide Reiter.
+  const lage = { meine: { pfad: [], anfrage: '' }, kollegium: { pfad: [], anfrage: '' } };
+  let artWahl = 'alle';
   let form = 'anmelden';          // 'anmelden' | 'registrieren'
   let beschaeftigt = false;
 
@@ -38,9 +41,12 @@ export function zeige(wurzel, ctx) {
 
   async function lade() {
     try {
-      const [m, k] = await Promise.all([store.quiz.meine(), store.quiz.kollegium()]);
+      // Die Liste der leeren Ordner ist Zugabe: Fehlt sie (z. B. Regeln noch nicht veröffentlicht), geht das Studio trotzdem.
+      const [m, k, l] = await Promise.all([store.quiz.meine(), store.quiz.kollegium(), store.ordner.laden().catch(() => [])]);
       meine = m;
       kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
+      leere = leereAufraeumen(l, m, T('studio.ohneFach'));
+      if (leere.length < l.length) store.ordner.speichern(leere).catch(() => {});
       // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen.
       try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium]))); } catch { /* ohne Speicher */ }
     } catch (e) { meldung(fehlerText(s(), e)); meine ??= []; kollegium ??= []; }
@@ -70,12 +76,15 @@ export function zeige(wurzel, ctx) {
     const ergebnis = await oeffneImport(s());
     if (!ergebnis) return;
     tue(async () => {
-      const id = await store.quiz.speichern(ergebnis.quiz);
+      const id = await store.quiz.speichern(imOffenenOrdner(ergebnis.quiz));
       const n = ergebnis.quiz.fragen.length, m = ergebnis.uebersprungen;
       meldung(m ? T('import.fertigAusgelassen', { n, m }) : T('import.fertig', { n }));
       ctx.geh('#/studio/quiz/' + id);
     }, false);
   }
+
+  /** Neue Inhalte landen im Ordner, der in «Meine» gerade offen ist (auf der obersten Stufe bleibt ihr eigenes Fach). */
+  const imOffenenOrdner = quiz => (lage.meine.pfad.length ? { ...quiz, ...zielVon(lage.meine.pfad, T('studio.ohneFach')) } : quiz);
 
   // ---------- Anmeldung ----------
   function anmeldung() {
@@ -141,7 +150,8 @@ export function zeige(wurzel, ctx) {
   // ---------- Listen ----------
   const meta = q => [q.fach || T('studio.ohneFach'), T(istPraesentation(q) ? 'studio.folien' : 'studio.fragen', { n: q.fragen.length }), (q.sprache || 'de').toUpperCase()].join(' · ');
   const bearbeiten = q => (istPraesentation(q) ? '#/studio/folien/' : '#/studio/quiz/') + q.id;
-  const artEtikett = q => (istPraesentation(q) ? h('span', { class: 'etikett art' }, T('studio.artPraesentation')) : null);
+  const ART_ETIKETT = { quiz: 'studio.artQuiz', praesentation: 'studio.artPraesentation', whiteboard: 'studio.artWhiteboard' };
+  const artEtikett = q => h('span', { class: 'etikett art ' + artVon(q) }, T(ART_ETIKETT[artVon(q)]));
   /** Knöpfe zum Starten: Präsentationen werden präsentiert, Quiz live oder als Cloche gespielt. */
   const startKnoepfe = q => (istPraesentation(q)
     ? [kleinerKnopf(T('studio.praesentieren'), () => spiele(q), '')]
@@ -149,7 +159,7 @@ export function zeige(wurzel, ctx) {
   const rueckblickText = q => T(istPraesentation(q) ? 'studio.ergebnisse' : 'studio.rueckblicke');
   const kleinerKnopf = (text, klick, klasse = 'leise') => h('button', { class: 'knopf klein ' + klasse, onclick: klick }, text);
 
-  function meineKarte(q) {
+  function meineKarte(q, mitOrt) {
     const titel = q.titel || T('editor.unbenannt');
     const unvollstaendig = quizFehler(q).length > 0;
     const haken = h('input', { type: 'checkbox', checked: !!q.freigegeben });
@@ -159,7 +169,7 @@ export function zeige(wurzel, ctx) {
       artEtikett(q),
       h('h3', null, titel),
       h('p', { class: 'meta' }, meta(q)),
-      ordnerTeile(q.ordner).length ? ablageort(q) : null,
+      mitOrt ? ablageort(q) : null,
       unvollstaendig ? h('span', { class: 'etikett' }, T('studio.unvollstaendig')) : null,
       h('label', { class: 'schalter' }, haken, T('studio.freigeben')),
       h('div', { class: 'kartenknoepfe' },
@@ -185,57 +195,111 @@ export function zeige(wurzel, ctx) {
         kleinerKnopf(T('studio.kopieren'), () => tue(async () => { await kopiereQuiz(store, q, q.titel); meldung(T('studio.kopiert')); }))));
   }
 
+  const neuKnopf = (text, klick) => h('button', { type: 'button', class: 'neueintrag', onclick: e => { e.target.closest('details').open = false; klick(); } }, text);
+  /** «+ Neu ▾»: alles, was sich anlegen lässt, in einem Menü. */
+  function neuMenue() {
+    const menue = h('details', { class: 'neumenue' },
+      h('summary', { class: 'knopf' }, T('studio.neuMenue')),
+      h('div', { class: 'neuliste' },
+        neuKnopf(T('studio.neu'), () => tue(async () => { ctx.geh('#/studio/quiz/' + await store.quiz.speichern(imOffenenOrdner(neuesQuiz(s())))); }, false)),
+        neuKnopf(T('studio.neuPraesentation'), () => tue(async () => { ctx.geh('#/studio/folien/' + await store.quiz.speichern(imOffenenOrdner(neuePraesentation(s())))); }, false)),
+        neuKnopf(T('studio.beispiel'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielQuiz(s()))))),
+        neuKnopf(T('studio.beispielPraesentation'), () => tue(() => store.quiz.speichern(imOffenenOrdner(beispielPraesentation(s())))))));
+    // Offenes Menü schliesst mit Escape oder einem Klick daneben, sonst liegt es über den Knöpfen darunter.
+    const zu = e => { if (e.type === 'keydown' ? e.key === 'Escape' : !menue.contains(e.target)) menue.open = false; };
+    menue.addEventListener('toggle', () => {
+      const an = menue.open ? 'addEventListener' : 'removeEventListener';
+      document[an]('pointerdown', zu);
+      document[an]('keydown', zu);
+    });
+    return menue;
+  }
+
+  /** Die gewählte Art, sofern es sie in dieser Liste gibt; sonst alle. */
+  const wirksameArt = quizze => (artWahl !== 'alle' && artZahlen(quizze)[artWahl] ? artWahl : 'alle');
+  const ART_KNOPF = { quiz: 'studio.artQuizze', praesentation: 'studio.artPraesentationen', whiteboard: 'studio.artWhiteboards' };
+  /** Knöpfe nach Art; eine Art ohne Inhalte erscheint nicht. */
+  function artenLeiste(quizze) {
+    const zahlen = artZahlen(quizze), an = wirksameArt(quizze);
+    const knopf = (k, text) => h('button', { type: 'button', class: 'artknopf' + (an === k ? ' an' : ''), 'aria-pressed': String(an === k),
+      onclick: () => { artWahl = k; zeichne(); } }, text);
+    return h('div', { class: 'artenleiste' },
+      knopf('alle', T('studio.artAlle', { n: zahlen.alle })),
+      ARTEN.filter(k => zahlen[k] > 0).map(k => knopf(k, T(ART_KNOPF[k], { n: zahlen[k] }))));
+  }
+
   function inhalt() {
     if (reiter === 'meine') {
       if (!meine) return h('p', { class: 'leer' }, T('allg.laedt'));
       return [
-        h('div', { class: 'aktionen' },
-          h('button', { class: 'knopf', onclick: () => tue(async () => { ctx.geh('#/studio/quiz/' + await store.quiz.speichern(neuesQuiz(s()))); }, false) }, '+ ' + T('studio.neu')),
-          h('button', { class: 'knopf', onclick: () => tue(async () => { ctx.geh('#/studio/folien/' + await store.quiz.speichern(neuePraesentation(s()))); }, false) }, '+ ' + T('studio.neuPraesentation')),
-          h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import')),
-          h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielQuiz(s()))) }, T('studio.beispiel')),
-          h('button', { class: 'knopf leise', onclick: () => tue(() => store.quiz.speichern(beispielPraesentation(s()))) }, T('studio.beispielPraesentation'))),
-        meine.length ? h('div', { class: 'karten' }, meine.map(meineKarte)) : h('p', { class: 'leer' }, T('studio.leer')),
+        h('div', { class: 'aktionen' }, neuMenue(), h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import'))),
+        meine.length || leere.length
+          ? [artenLeiste(meine), ablage({
+            quizze: meine, leer: leere, stand: lage.meine, karte: meineKarte,
+            wurzelText: T('studio.wurzelMeine'), suchText: T('studio.suchen'),
+            oben: sichtbar => (sichtbar.length ? [
+              h('h2', { class: 'fachtitel' }, T('studio.zuletzt')),
+              h('div', { class: 'karten zuletzt' }, zuletzt(sichtbar).map(q => meineKarte(q, true))),
+              h('h2', { class: 'fachtitel' }, T('studio.ablage')),
+            ] : []),
+          })]
+          : h('p', { class: 'leer' }, T('studio.leer')),
       ];
     }
     if (!kollegium) return h('p', { class: 'leer' }, T('allg.laedt'));
     if (!kollegium.length) return h('p', { class: 'leer' }, T('studio.kollegiumLeer'));
-    return ablage();
+    return [artenLeiste(kollegium), ablage({
+      quizze: kollegium, leer: [], stand: lage.kollegium, karte: kollegiumKarte,
+      wurzelText: T('studio.kollegium'), suchText: T('studio.suchenKollegium'),
+    })];
   }
 
-  /** Freigaben als Ordner (Fach, darunter die Ordner aus dem Editor) mit Suche über alles. */
-  function ablage() {
+  /**
+   * Ablage als Ordner (Fach, darunter die Ordner) mit Suche über alles, für beide Reiter.
+   * stand = { pfad, anfrage } des Reiters. oben(sichtbar): auf der obersten Stufe ohne Suche vor den Ordnern.
+   * extras(pfad, inhalt, geheZu) -> { hinterKrumen, ordnerEnde }: Zusätzliches zum Verwalten der Ordner.
+   */
+  function ablage({ quizze, leer, stand, karte, wurzelText, suchText, oben = () => [], extras = () => ({}) }) {
     const ohne = T('studio.ohneFach');
-    const feld = h('input', { class: 'feld suchfeld', type: 'search', value: anfrage, placeholder: T('studio.suchen'), 'aria-label': T('studio.suchen') });
+    const feld = h('input', { class: 'feld suchfeld', type: 'search', value: stand.anfrage, placeholder: suchText, 'aria-label': suchText });
     const bereich = h('div', { class: 'ablage' });
-    const geheZu = neu => { pfad = neu; fuelle(); };
+    const geheZu = neu => { stand.pfad = neu; fuelle(); };
     const krume = (text, ziel, hier) => hier
       ? h('span', { 'aria-current': 'page' }, text)
       : h('button', { type: 'button', class: 'krume', onclick: () => geheZu(ziel) }, text);
-    const ordnerKnopf = o => h('button', { type: 'button', class: 'ordner', onclick: () => geheZu([...pfad, o.name]) },
+    const ordnerKnopf = o => h('button', { type: 'button', class: 'ordner', onclick: () => geheZu([...stand.pfad, o.name]) },
       svg('<svg class="ordnerbild" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v8.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" fill="currentColor"/></svg>'),
       h('span', { class: 'ordnername' }, o.name), h('span', { class: 'ordnerzahl' }, String(o.anzahl)));
+    /** Ein eigener leerer Ordner bleibt offen, auch wenn nichts darin liegt. */
+    const istLeererOrdner = p => leer.some(e => istUnter(e, p, ohne));
     // Nur dieser Bereich wird neu gezeichnet: Das Suchfeld behält beim Tippen den Fokus.
     function fuelle() {
-      if (anfrage.trim()) {
-        const treffer = suche(kollegium, anfrage);
+      const sichtbar = nachArt(quizze, wirksameArt(quizze));
+      if (stand.anfrage.trim()) {
+        const treffer = suche(sichtbar, stand.anfrage);
         bereich.replaceChildren(
           h('p', { class: 'trefferzahl', role: 'status' }, treffer.length ? T('studio.treffer', { n: treffer.length }) : T('studio.keineTreffer')),
-          h('div', { class: 'karten' }, treffer.map(q => kollegiumKarte(q, true))));
+          h('div', { class: 'karten' }, treffer.map(q => karte(q, true))));
         return;
       }
-      let inhalt = inhaltVon(kollegium, pfad, ohne);
-      // Der geöffnete Ordner ist leer geworden (Freigabe zurückgezogen): eine Stufe hinauf.
-      while (pfad.length && !inhalt.ordner.length && !inhalt.quizze.length) { pfad = pfad.slice(0, -1); inhalt = inhaltVon(kollegium, pfad, ohne); }
+      let inhalt = inhaltVon(sichtbar, stand.pfad, ohne, leer);
+      // Der geöffnete Ordner ist leer geworden (verschoben, Freigabe zurückgezogen): eine Stufe hinauf.
+      while (stand.pfad.length && !inhalt.ordner.length && !inhalt.quizze.length && !istLeererOrdner(stand.pfad)) {
+        stand.pfad = stand.pfad.slice(0, -1);
+        inhalt = inhaltVon(sichtbar, stand.pfad, ohne, leer);
+      }
+      const mehr = extras(stand.pfad, inhalt, geheZu);
       bereich.replaceChildren(...[   // replaceChildren schriebe «null» als Text hin, darum gefiltert
-        pfad.length ? h('nav', { class: 'brotkrumen', 'aria-label': T('studio.ablage') },
-          krume(T('studio.kollegium'), [], false),
-          pfad.map((teil, i) => [h('span', { 'aria-hidden': 'true' }, '›'), krume(teil, pfad.slice(0, i + 1), i === pfad.length - 1)])) : null,
-        inhalt.ordner.length ? h('div', { class: 'ordnerliste' }, inhalt.ordner.map(ordnerKnopf)) : null,
-        inhalt.quizze.length ? h('div', { class: 'karten' }, inhalt.quizze.map(q => kollegiumKarte(q, false))) : null,
+        stand.pfad.length ? h('nav', { class: 'brotkrumen', 'aria-label': T('studio.ablage') },
+          krume(wurzelText, [], false),
+          stand.pfad.map((teil, i) => [h('span', { 'aria-hidden': 'true' }, '›'), krume(teil, stand.pfad.slice(0, i + 1), i === stand.pfad.length - 1)]),
+          mehr.hinterKrumen || null) : null,
+        ...(stand.pfad.length ? [] : oben(sichtbar)),
+        inhalt.ordner.length || mehr.ordnerEnde ? h('div', { class: 'ordnerliste' }, inhalt.ordner.map(ordnerKnopf), mehr.ordnerEnde || null) : null,
+        inhalt.quizze.length ? h('div', { class: 'karten' }, inhalt.quizze.map(q => karte(q, false))) : null,
       ].filter(Boolean));
     }
-    feld.addEventListener('input', () => { anfrage = feld.value; fuelle(); });
+    feld.addEventListener('input', () => { stand.anfrage = feld.value; fuelle(); });
     fuelle();
     return [h('div', { class: 'suchzeile' }, feld), bereich];
   }
