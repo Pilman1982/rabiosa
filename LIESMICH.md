@@ -79,12 +79,18 @@ Rabiosa gibt es zweimal mit demselben Programm:
 
 Student-Fassung einrichten: die Schritte 1 bis 5 unter «Firebase einrichten» mit einem zweiten Projekt wiederholen (dieselbe Datei `firestore.rules`), die Angaben der Web-App bei `FIREBASE_STUDENT` eintragen. Die Sammlung der Profile heisst auch dort `dozierende`.
 
-## Ablage der Freigaben: Ordner und Suche
+## Ablage: Ordner, Arten und Suche
 
-- Im Editor hat jedes Quiz neben dem Fach ein Feld **Ordner** (zum Beispiel `HS26/Final`, Unterordner mit `/`, höchstens vier Stufen). Das Feld schlägt Ordner vor, die schon jemand benutzt.
-- Im Reiter «Kollegium» liegen die Freigaben in Ordnern: zuoberst die Fächer, darunter die Ordner. Schreibweisen fallen zusammen (Gross/Klein, Akzente).
-- Die Suche geht über alle Freigaben: Titel, Fach, Ordner, Name der Person, dazu Fragen und Antworten. Mehrere Wörter müssen alle vorkommen.
-- Die Logik steht in `js/logik/ablage.js`. Die Ordner sind nur ein Textfeld im Quiz (`ordner`); die Regeln in Firestore brauchen dafür keine Änderung.
+Konzept: `09 Hilfsmittel/Rabiosa/Studio Ordnung Konzept.md` im EHL-Ordner.
+
+- **Ein Ordner für beides:** Jeder Inhalt liegt unter seinem Fach und dem Feld **Ordner** (zum Beispiel `HS26/Final`, Unterordner mit `/`, höchstens vier Stufen). Dieselbe Lage gilt in «Meine Inhalte» und, nach dem Freigeben, im Reiter «Kollegium». Schreibweisen fallen zusammen (Gross/Klein, Akzente).
+- **Meine Inhalte:** Ordner zum Durchklicken mit Brotkrumen, auf der obersten Stufe zuerst «Zuletzt bearbeitet» (fünf Inhalte nach `geaendert`). **+ Neuer Ordner** legt auch leere Ordner an (auf der obersten Stufe ein Fach). Karten lassen sich auf einen Ordner oder eine Brotkrume ziehen oder über **Verschieben …** ablegen. Ordner unter einem Fach lassen sich umbenennen (ändert `ordner` bei allen eigenen Inhalten darin); löschen geht nur bei leeren Ordnern. Wird der letzte Inhalt aus einem Ordner verschoben, bleibt der Ordner als leerer stehen.
+- **+ Neu ▾** fasst Neues Quiz, Neue Präsentation und die Beispiele zusammen. Neues (auch Importiertes) landet im offenen Ordner.
+- **Arten:** In beiden Reitern filtern Knöpfe nach Quiz, Präsentationen und (später) Whiteboards. Ein Knopf erscheint nur, wenn es von dieser Art etwas gibt. Ein Inhalt ohne gültiges Feld `art` ist ein Quiz. Jede Karte trägt ihre Art als Etikett (Quiz Navy, Präsentation Petrol, Whiteboard Kupfer).
+- **Suche** in beiden Reitern über Titel, Fach, Ordner (im Kollegium auch die Person), Fragen und Antworten. Mehrere Wörter müssen alle vorkommen; die gewählte Art gilt auch für die Treffer.
+- **Daten:** Leere Ordner stehen pro Person in `ordnerlisten/{uid}` `{ liste: [{ fach, ordner }] }`, höchstens 300 Einträge (`LEERE_MAX`). Sobald etwas in einem solchen Ordner liegt, räumt das Studio den Eintrag weg. Verschieben und Umbenennen ändern nur `fach` und `ordner` (`store.quiz.verschieben`), nicht `geaendert`.
+- **Regeln:** Der Block `ordnerlisten` in `firestore.rules` muss in **beiden** Projekten veröffentlicht sein. Im Projekt der Dozierenden nur diesen Block in den Konsolenstand einfügen, nicht die ganze Datei (der Block `checkout_rangliste` gehört dort nicht hin). Ohne veröffentlichte Regel läuft das Studio weiter: Verschieben geht, aber «+ Neuer Ordner» meldet einen Fehler, und ein geleerter Ordner bleibt nicht stehen.
+- **Aufbau:** Logik in `js/logik/ablage.js` (Tests in `tests/ablage.test.js`), Speicher in `js/store/demo.js` und `js/store/firebase.js` (`ordner.laden`, `ordner.speichern`, `quiz.verschieben`), Ansicht in `js/ansicht/studio.js` (`ablage()` für beide Reiter, `verwaltung()` für «Meine»), Rückfrage mit Eingabe `eingabeFrage` in `js/ui.js`.
 
 ## Quiz mit einer KI erstellen und importieren
 

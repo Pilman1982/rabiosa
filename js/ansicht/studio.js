@@ -243,7 +243,8 @@ export function zeige(wurzel, ctx) {
     if (liegtGenau(q, ziel)) return;
     const neueLeere = quelleMerken(meine, leere, q, ohneFach());
     tue(async () => {
-      if (neueLeere !== leere) await store.ordner.speichern(neueLeere);
+      // Klappt das Merken nicht (Regel noch nicht veröffentlicht), wird trotzdem verschoben; der Ordner fällt dann weg.
+      if (neueLeere !== leere) await store.ordner.speichern(neueLeere).catch(() => {});
       await store.quiz.verschieben(q.id, zielVon(ziel, ohneFach()));
     });
   }
