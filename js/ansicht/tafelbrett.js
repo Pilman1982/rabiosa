@@ -5,16 +5,17 @@
 // Eigene Änderungen erscheinen sofort über eine lokale Vorschau («lokal»), bis der Speicher sie zurückmeldet.
 // Was jemand anderes gerade bearbeitet (Feld «bearbeitet»), trägt einen Rahmen in Petrol mit dessen Vornamen.
 // Name der Leitung in «bearbeitet» und «vonName»: der erste Teil des Kontonamens (kurzname), sonst der E-Mail-Name.
-import { h, meldung, fehlerText, marke } from '../ui.js';
+import { h, meldung, fehlerText, marke, rueckfrage } from '../ui.js';
 import { t } from '../i18n.js';
 import { neuerStapel, merke, rueckgaengig, wiederholen, istOnline } from '../logik/tafel.js';
 import {
   zuBrett, einpassen, zoome, reihenfolge, erstelleDrossel, kurzname, istFremdBearbeitet, gleicheElemente,
-  neueKennung, DROSSEL_MS, FREMD_MS,
+  neueKennung, zVorn, DROSSEL_MS, FREMD_MS,
 } from '../logik/tafelbrett.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
 import { zeichneElement, zeichneWelt } from './tafelelemente.js';
 import { erstelleWerkzeuge } from './tafelwerkzeuge.js';
+import { erstelleBilder, erstelleBildUrls } from './tafelbilder.js';
 
 const LEBENSZEICHEN_MS = 30_000;
 const ECHO_MS = 3000;            // so lange wartet eine gespeicherte Vorschau auf die Rückmeldung des Speichers
@@ -50,6 +51,9 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   let zu = false, gebaut = false, gezeigt = '', letzteMeldung = 0, auftragOffen = true;
   let leertaste = false, schwenk = null, letzterKlick = null;
   const knoten = new Map();        // id -> { json, el }
+  const bilder = erstelleBildUrls(pfad => store.tafel.bildLaden(pfad));   // Adressen der Bilder (Object-URL)
+  let bilderMod = null;            // Einfügen und Sticker, entsteht mit dem Board
+  let zeiger = null;               // letzte Mausposition über dem Board (Bildschirm), sonst null
   const timer = new Set();
   const medien = matchMedia(NUR_ANSEHEN);
   let nurAnsehen = medien.matches;
@@ -117,7 +121,16 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     zeichne();
     roh.speichern(nachher);
   }
-  function loeschen(e, merken = true) {
+  /** Ein Bild lässt sich nach dem Löschen nicht zurückholen (die Datei ist weg): Rückfrage, kein Schritt für Rückgängig. */
+  async function bildLoeschen(e) {
+    if (!schreibbar() || !(await rueckfrage(sprache(), T('bild.loeschenFrage'), T('brett.loeschen')))) return;
+    if (!schreibbar() || !element(e.id)) return;
+    const ohne = s => s.vorher?.id !== e.id && s.nachher?.id !== e.id;
+    stapel = { zurueck: stapel.zurueck.filter(ohne), vor: stapel.vor.filter(ohne) };
+    loeschenDirekt(e, false);
+  }
+  const loeschen = e => (e.art === 'bild' ? bildLoeschen(e) : loeschenDirekt(e));
+  function loeschenDirekt(e, merken = true) {
     drossel.abbrechen();
     if (!schreibbar()) return;
     if (merken) stapel = merke(stapel, { vorher: ohneBearbeitung(e), nachher: null });
@@ -129,6 +142,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   function wende(schritt) {
     if (!schritt) return;
     werkzeuge.abbrechen();
+    if (schritt.nachher && schritt.nachher.art === 'bild' && !element(schritt.nachher.id)) return;   // das Bild ist inzwischen gelöscht
     if (schritt.nachher) { warteAufEcho(schritt.nachher.id, schritt.nachher); roh.speichern(schritt.nachher); }
     else if (schritt.vorher) { if (auswahl === schritt.vorher.id) auswahl = null; warteAufEcho(schritt.vorher.id, null); roh.loeschen(schritt.vorher); }
     zeichne();
@@ -174,15 +188,25 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   }
 
   // ---------- Zeichnen ----------
+  function ladeBild(pfad) {
+    bilder.bildUrl(pfad).then(url => {
+      if (zu) return;
+      if (!url) { const nr = setTimeout(() => { timer.delete(nr); zeichne(); }, 5200); timer.add(nr); }   // später noch einmal versuchen
+      zeichne();
+    });
+  }
   function zeichne() {
     if (!gebaut || zu) return;
     const da = new Set();
     for (const e of reihenfolge(elemente())) {
       da.add(e.id);
-      const json = JSON.stringify(e);
+      const pfad = e.art === 'bild' && e.bildPfad;
+      let url;
+      if (pfad) { url = bilder.gecacht(pfad); if (url === undefined && !bilder.laeuft(pfad)) ladeBild(pfad); }
+      const json = JSON.stringify(e) + (url || '');
       const alt = knoten.get(e.id);
       if (alt && alt.json === json) continue;
-      const el = zeichneElement(e);
+      const el = zeichneElement(e, e.art === 'bild' ? { bildUrl: url || undefined, ladetext: pfad ? undefined : T('bild.laedt') } : undefined);
       if (alt) alt.el.replaceWith(el); else ebene.append(el);
       knoten.set(e.id, { json, el });
     }
@@ -248,7 +272,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   function aktualisiereModus() {
     if (!gebaut) return;
     const m = modus();
-    if (!m.schreib) { werkzeuge.abbrechen(); auswahl = null; }
+    if (!m.schreib) { werkzeuge.abbrechen(); bilderMod?.schliessen(); auswahl = null; }
     leisteEl.hidden = !m.schreib;
     hinweisEl.hidden = !m.hinweis;
     hinweisEl.textContent = m.hinweis;
@@ -258,7 +282,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
 
   // ---------- Bedienung ----------
   function unten(ev) {
-    if (ev.target.closest('.tb-editor, .tbr-zoom')) return;
+    if (ev.target.closest('.tb-editor, .tbr-zoom, .tbs-wahl')) return;
     const warOffen = werkzeuge.beendeBearbeitung();
     if (ev.button !== 0 && ev.button !== 1) return;
     ev.preventDefault();
@@ -273,12 +297,43 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   }
   function starteSchwenk(ev) { schwenk = { x: ev.clientX, y: ev.clientY, a: ansicht }; buehne.classList.add('schwenkt'); }
   function bewege(ev) {
+    zeiger = { x: ev.clientX, y: ev.clientY };
     if (schwenk) { setzeAnsicht({ ...schwenk.a, x: schwenk.a.x + ev.clientX - schwenk.x, y: schwenk.a.y + ev.clientY - schwenk.y }); return; }
     werkzeuge.ziehen(ev, brettPunkt(ev));
   }
   function loslassen(ev) {
     if (schwenk) { schwenk = null; buehne.classList.remove('schwenkt'); return; }
     werkzeuge.los(ev, brettPunkt(ev));
+  }
+  /** Mitte der Ansicht in Board-Einheiten. */
+  const mittePunkt = () => zuBrett(ansicht, ...mitte());
+  /** Wo die Maus zuletzt über dem Board war (Board-Einheiten), sonst die Mitte der Ansicht. */
+  const zeigerPunkt = () => (zeiger ? brettPunkt({ clientX: zeiger.x, clientY: zeiger.y }) : mittePunkt());
+  const dateienIn = dt => (dt ? [...(dt.files || [])] : []);
+  const hatDateien = dt => !!dt && [...(dt.types || [])].includes('Files');
+
+  /** Strg+V: Bilder (auch mehrere) werden hochgeladen, Text ohne Bild wird ein Textfeld an der Maus. */
+  function einfuegen(ev) {
+    if (zu || !gebaut || !schreibbar()) return;
+    if (ev.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
+    const cd = ev.clipboardData;
+    if (!cd) return;
+    let dateien = dateienIn(cd);
+    if (!dateien.length) dateien = [...(cd.items || [])].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    const p = zeigerPunkt();
+    if (dateien.length) { ev.preventDefault(); bilderMod.einfuegen(dateien, p); return; }
+    const text = cd.getData('text/plain') || '';
+    if (!text.trim()) return;
+    ev.preventDefault();
+    const id = werkzeuge.textEinfuegen(text, p);
+    api.platziert(id);
+  }
+  const dateiUeber = ev => { if (hatDateien(ev.dataTransfer)) { ev.preventDefault(); if (ev.type === 'dragover') ev.dataTransfer.dropEffect = schreibbar() ? 'copy' : 'none'; } };
+  function dateiFallen(ev) {
+    if (!hatDateien(ev.dataTransfer)) return;
+    ev.preventDefault();
+    buehne?.classList.remove('datei-drueber');
+    if (ev.target.closest?.('.tbr-buehne') && schreibbar()) bilderMod.einfuegen(dateienIn(ev.dataTransfer), brettPunkt(ev));
   }
   function rad(ev) {
     ev.preventDefault();
@@ -314,6 +369,21 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     /** Nach Abbruch: den letzten Stand still festhalten, ohne Schritt und ohne Meldung. */
     stillSpeichern(e) { drossel.abbrechen(); if (schreibbar()) store.tafel.elementSpeichern(code, ohneBearbeitung(e)).catch(() => {}); },
     neueKennung: () => neueKennung(Date.now(), zufallsKennung),
+    code,
+    /** Neues Element mit Kennung, Gruppe, Ebene ganz vorn und Urheber. */
+    neu(art, felder) {
+      return { id: api.neueKennung(), gruppe, art, z: zVorn(elemente()), von: ich.uid, vonName: ich.name, bearbeitet: null, ...felder };
+    },
+    mitte: mittePunkt,
+    get buehne() { return buehne; },
+    get bilder() { return bilderMod; },
+    bildHochladen: (e, blob) => store.tafel.bildHochladen(code, e, blob),
+    zaehlerBeobachten: cb => store.tafel.zaehlerBeobachten(code, gruppe, cb),
+    /** Ein hochgeladenes Bild bleibt als lokaler Stand stehen, bis der Speicher es meldet. */
+    echo(e) { if (!zu) { warteAufEcho(e.id, e); zeichne(); } },
+    fehlgeschlagen,
+    /** Ein neues Element ist gelegt: Auswählen-Werkzeug, Element gewählt. */
+    platziert(id) { werkzeuge.waehle('auswaehlen'); api.waehle(id); },
     starteSchwenk,
     /** Höhe des Inhalts eines Text- oder Zettel-Elements in Board-Einheiten. */
     messe(e) {
@@ -346,6 +416,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
         zoomKnopf(T('brett.einpassen'), T('brett.einpassen'), passeEin)));
     kopfEl = h('header', { class: 'tbr-kopf' });
     auftragEl = h('div', { class: 'tbr-auftrag' });
+    bilderMod = erstelleBilder(api);
     werkzeuge = erstelleWerkzeuge(api);
     leisteEl = werkzeuge.leiste;
     ziel.replaceChildren(h('div', { class: 'tbr' }, kopfEl, auftragEl, leisteEl, buehne));
@@ -355,6 +426,9 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     buehne.addEventListener('pointercancel', loslassen);
     buehne.addEventListener('wheel', rad, { passive: false });
     buehne.addEventListener('auxclick', ev => ev.preventDefault());
+    buehne.addEventListener('pointerleave', () => { zeiger = null; });
+    buehne.addEventListener('dragover', ev => { dateiUeber(ev); if (hatDateien(ev.dataTransfer) && schreibbar()) buehne.classList.add('datei-drueber'); });
+    buehne.addEventListener('dragleave', ev => { if (!buehne.contains(ev.relatedTarget)) buehne.classList.remove('datei-drueber'); });
     buehne.addEventListener('scroll', () => { buehne.scrollTop = 0; buehne.scrollLeft = 0; });
     const beobachter = new ResizeObserver(() => { if (eingepasst) passeEin(); });
     beobachter.observe(buehne);
@@ -377,7 +451,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
       if (kennung === 'bereit') { zeichneKopf(); aktualisiereModus(); }
       return;
     }
-    if (gezeigt === 'bereit') { werkzeuge.abbrechen(); werkzeuge = LEER; gebaut = false; knoten.clear(); }
+    if (gezeigt === 'bereit') { werkzeuge.abbrechen(); bilderMod?.abbau(); bilderMod = null; werkzeuge = LEER; gebaut = false; knoten.clear(); }
     gezeigt = kennung;
     if (kennung === 'bereit') { baue(); return; }
     const text = kennung === 'laedt' ? T('allg.laedt') : kennung === 'fremd' ? T('brett.fremd') : T('brett.weg');
@@ -410,6 +484,9 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   medien.addEventListener('change', medienWechsel);
   document.addEventListener('keydown', taste);
   document.addEventListener('keyup', tasteLos);
+  document.addEventListener('paste', einfuegen);
+  document.addEventListener('dragover', dateiUeber);   // eine daneben fallende Datei soll die Seite nicht verlassen
+  document.addEventListener('drop', dateiFallen);
   window.addEventListener('blur', blur);
   zustand();
 
@@ -423,7 +500,12 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     medien.removeEventListener('change', medienWechsel);
     document.removeEventListener('keydown', taste);
     document.removeEventListener('keyup', tasteLos);
+    document.removeEventListener('paste', einfuegen);
+    document.removeEventListener('dragover', dateiUeber);
+    document.removeEventListener('drop', dateiFallen);
     window.removeEventListener('blur', blur);
+    bilderMod?.abbau(); bilderMod = null;
+    bilder.freigeben();
     for (const f of aufraeumen) { try { f(); } catch { /* schon weg */ } }
   };
 }

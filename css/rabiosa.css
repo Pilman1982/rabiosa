@@ -824,3 +824,18 @@ body[data-ansicht="tafelbrett"] { background: var(--papier); }
   font-family: var(--sans); font-weight: 400; padding: 0; margin: 0; color: var(--navy); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .tb-editor-zettel { padding: 18px 20px; }
 @media (max-width: 767px) { .tbr-kopf { padding: 8px 12px; } .tbr-titel { font-size: 17px; } }
+
+/* Whiteboard: Bilder und Sticker */
+.tb-platzhalter { display: grid; place-items: center; }
+.tb-ladetext { font-size: 28px; color: var(--text-leise); text-align: center; padding: 12px; }
+.tb-sticker img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tbr-buehne.datei-drueber { outline: 4px dashed var(--kupfer); outline-offset: -8px; }
+.tbs-wahl { position: absolute; top: 10px; left: 10px; width: min(360px, calc(100% - 20px)); max-height: calc(100% - 20px); overflow-y: auto; background: #fff; border-radius: 12px; box-shadow: 0 6px 28px #00143640; padding: 10px 12px 12px; z-index: 4; user-select: none; -webkit-user-select: none; cursor: default; }
+.tbs-kopf { display: flex; align-items: center; justify-content: space-between; color: var(--navy); }
+.tbs-zu { border: 0; background: transparent; font-size: 22px; line-height: 1; width: 32px; height: 32px; border-radius: 99px; color: var(--navy); }
+.tbs-zu:hover { background: #0014360d; }
+.tbs-wahl h4 { margin: 10px 0 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-leise); font-weight: 600; }
+.tbs-raster { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.tbs-knopf { border: 0; background: transparent; border-radius: 8px; aspect-ratio: 1; font-size: 24px; line-height: 1; display: grid; place-items: center; padding: 0; }
+.tbs-knopf:hover, .tbs-knopf:focus-visible { background: #0014360f; }
+.tbs-knopf img { width: 80%; height: 80%; display: block; }

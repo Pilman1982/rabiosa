@@ -27,7 +27,8 @@ const NAMEN = {
   auswaehlen: 'brett.auswaehlen', stift: 'brett.stift', text: 'brett.text', zettel: 'brett.zettel', pfeil: 'brett.pfeil',
   form: 'brett.form', bild: 'brett.bild', sticker: 'brett.sticker', radierer: 'brett.radierer',
 };
-const SPAETER = new Set(['bild', 'sticker']);   // Task 7: Bilder, GIFs und Sticker
+const AKTION = new Set(['bild', 'sticker']);   // Knöpfe ohne Werkzeug: öffnen die Dateiauswahl bzw. die Sticker
+const ARTEN_RADIERBAR = ['zettel', 'text', 'strich', 'pfeil', 'form', 'sticker'];   // Bilder löscht man mit Rückfrage über Auswahl + Löschen
 const STIFTFARBE = new Set(['strich', 'pfeil', 'form', 'text']);
 
 export function erstelleWerkzeuge(b) {
@@ -39,8 +40,13 @@ export function erstelleWerkzeuge(b) {
 
   // ---------- Leiste ----------
   const knopf = (name, titel, f, extra = {}) => h('button', { type: 'button', class: 'tbw-knopf', title: titel, 'aria-label': titel, onclick: f, ...extra }, icon(name), h('span', null, titel));
+  const aktion = {
+    bild: () => { beendeBearbeitung(); b.bilder.dateiWaehlen(); },
+    sticker: () => { beendeBearbeitung(); b.bilder.stickerWahl(); },
+  };
   const werkzeugKnoepfe = WERKZEUGE.map(name => knopf(name, T(NAMEN[name]),
-    () => waehleWerkzeug(name), SPAETER.has(name) ? { disabled: true, title: T('brett.spaeter') } : { 'aria-pressed': 'false' }));
+    AKTION.has(name) ? aktion[name] : () => waehleWerkzeug(name),
+    AKTION.has(name) ? (name === 'bild' ? { title: T('bild.waehlen') } : { 'data-tbs-knopf': '' }) : { 'aria-pressed': 'false' }));
   const zurueckKnopf = knopf('zurueck', T('brett.zurueck'), () => b.zurueck());
   const vorKnopf = knopf('vor', T('brett.vor'), () => b.vor());
   const optionen = h('div', { class: 'tbw-optionen' });
@@ -99,7 +105,7 @@ export function erstelleWerkzeuge(b) {
 
   function aktualisiere() {
     WERKZEUGE.forEach((name, i) => {
-      if (SPAETER.has(name)) return;
+      if (AKTION.has(name)) return;
       werkzeugKnoepfe[i].classList.toggle('an', wahl.werkzeug === name);
       werkzeugKnoepfe[i].setAttribute('aria-pressed', String(wahl.werkzeug === name));
     });
@@ -111,10 +117,7 @@ export function erstelleWerkzeuge(b) {
   }
 
   // ---------- Neue Elemente ----------
-  function neu(art, felder) {
-    const ich = b.ich();
-    return { id: b.neueKennung(), gruppe: b.gruppe, art, z: zVorn(b.elemente()), von: ich.uid, vonName: ich.name, bearbeitet: null, ...felder };
-  }
+  const neu = (art, felder) => b.neu(art, felder);
   const stiftFarbe = () => FARBEN.stift[wahl.stift];
 
   // ---------- Textfeld ----------
@@ -171,7 +174,7 @@ export function erstelleWerkzeuge(b) {
   const treffer = (p, arten) => getroffen(b.elemente().filter(e => !arten || arten.includes(e.art)), p.x, p.y, 6 / b.massstab());
 
   function radiere(p) {
-    const e = treffer(p);
+    const e = treffer(p, ARTEN_RADIERBAR);
     if (!e || geste.weg.has(e.id)) return;
     geste.weg.add(e.id);
     b.loeschen(e);
@@ -303,6 +306,15 @@ export function erstelleWerkzeuge(b) {
     return false;
   }
 
+  /** Eingefügten Text (Strg+V ohne Bild) als Textfeld an die Stelle p legen. Ergebnis: Kennung. */
+  function textEinfuegen(text, p) {
+    const g = TEXTGROESSE[wahl.groesse];
+    const e = neu('text', { x: Math.round(p.x), y: Math.round(p.y), b: TEXT_BREITE, h: Math.round(g * 1.3), farbe: stiftFarbe(), groesse: wahl.groesse, text: text.slice(0, TEXT_MAX) });
+    e.h = Math.max(b.messe(e), Math.round(g * 1.3));
+    b.speichern(e, null);
+    return e.id;
+  }
+
   /** Alles Laufende beenden (Sperre, Rückgängig, Abbau). Bewegtes wird still festgehalten, Neues verworfen. */
   function abbrechen() {
     if (bearbeitung) {
@@ -319,5 +331,5 @@ export function erstelleWerkzeuge(b) {
     if ((g.art === 'bewegen' || g.art === 'groesse') && g.aktuell) { b.verwerfen(g.aktuell.id); b.stillSpeichern(g.aktuell); }
   }
 
-  return { leiste, aktualisiere, abbrechen, beendeBearbeitung, unten, ziehen, los, doppel, taste };
+  return { leiste, aktualisiere, abbrechen, beendeBearbeitung, unten, ziehen, los, doppel, taste, textEinfuegen, waehle: waehleWerkzeug };
 }

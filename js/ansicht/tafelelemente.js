@@ -3,6 +3,7 @@
 // Fremde Texte gehen nur als Textknoten ins Dokument, Farben nur nach Prüfung.
 import { h } from '../ui.js';
 import { zonenRaster } from '../logik/tafel.js';
+import { stickerQuelle } from '../logik/tafelbilder.js';
 import { DICKE, TEXTGROESSE, ZETTELGROESSE, pfeilSpitze } from '../logik/tafelbrett.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -57,11 +58,15 @@ function form(e, b, hoehe) {
   return svg;
 }
 
+/** Adresse eines EHL-Stickers; vom Ort des Programms aus, damit sie in jeder Fassung stimmt. */
+export const stickerUrl = name => new URL(`../../bilder/sticker/${name}.svg`, import.meta.url).href;
+
 /**
  * Ein Element als absolut positionierter Knoten (left/top/width/height in Board-Einheiten, z-index = z).
- * bildUrl: Adresse für ein Bild-Element (Task 7 lädt sie über getBlob); ohne sie erscheint ein Platzhalter.
+ * bildUrl: Adresse für ein Bild-Element (das Board lädt sie über den geprüften Zugriff); ohne sie erscheint ein Platzhalter,
+ * mit «ladetext» darin (während des Hochladens).
  */
-export function zeichneElement(e, { bildUrl } = {}) {
+export function zeichneElement(e, { bildUrl, ladetext } = {}) {
   const b = Math.max(1, zahl(e.b, 1)), hoehe = Math.max(1, zahl(e.h, 1));
   const el = h('div', { class: 'tb-el tb-' + e.art, 'data-id': e.id });
   el.style.left = zahl(e.x) + 'px';
@@ -86,12 +91,15 @@ export function zeichneElement(e, { bildUrl } = {}) {
     case 'form': el.append(form(e, b, hoehe)); break;
     case 'bild':
       if (bildUrl) el.append(h('img', { src: bildUrl, alt: '', draggable: 'false' }));
+      else { el.classList.add('tb-platzhalter'); if (ladetext) el.append(h('span', { class: 'tb-ladetext' }, ladetext)); }
+      break;
+    case 'sticker': {
+      const q = stickerQuelle(e.zeichen);
+      if (q && q.art === 'ehl') el.append(h('img', { src: stickerUrl(q.name), alt: '', draggable: 'false' }));
+      else if (q) { el.style.fontSize = Math.round(Math.min(b, hoehe) * 0.8) + 'px'; el.append(h('span', { class: 'tb-zeichen' }, q.zeichen)); }
       else el.classList.add('tb-platzhalter');
       break;
-    case 'sticker':
-      if (e.zeichen) { el.style.fontSize = Math.round(Math.min(b, hoehe) * 0.8) + 'px'; el.append(h('span', { class: 'tb-zeichen' }, e.zeichen)); }
-      else el.classList.add('tb-platzhalter');
-      break;
+    }
     default: el.classList.add('tb-platzhalter');
   }
   return el;

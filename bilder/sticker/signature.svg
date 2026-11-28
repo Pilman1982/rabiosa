@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="4">
+<path stroke="#001436" d="M10 66 C24 30 30 20 36 24 C44 30 22 74 34 72 C46 70 52 44 60 46 C66 48 58 66 66 64 C76 62 80 50 90 44"/>
+<path stroke="#B6633F" d="M12 82 H88"/>
+<text x="50" y="17" text-anchor="middle" font-family="serif" font-size="14" font-style="italic" fill="#B6633F" stroke="none" letter-spacing="1">Signature</text>
+</svg>
