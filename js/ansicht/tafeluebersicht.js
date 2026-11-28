@@ -4,8 +4,8 @@
 //
 // Bilder erscheinen in den Kacheln nur als Platzhalter (alle Bilder aller Gruppen zu laden wäre zu schwer);
 // in «Neue Bilder» werden sie geladen, zuerst die neuesten 24, mehr auf Knopfdruck.
-// «Alle als HTML» liefert Task 10 über den Haken ctx.exportHtml(code, gruppe): gruppe === null = alle Gruppen (nur die Leitung),
-// eine Zahl = nur diese Gruppe. Ohne den Haken bleibt der Knopf ausgeschaltet.
+// «Alle als PDF» führt zur Druckansicht #/tafel/CODE/druck. «Alle als HTML» über den Haken ctx.exportHtml(code, gruppe) aus main.js
+// (js/ansicht/tafelexport.js): gruppe === null = alle Gruppen (nur die Leitung), eine Zahl = nur diese Gruppe. Ohne den Haken bleibt der Knopf aus.
 import { h, svg, marke, meldung, fehlerText, rueckfrage } from '../ui.js';
 import { t } from '../i18n.js';
 import { qrSvg } from '../qr.js';

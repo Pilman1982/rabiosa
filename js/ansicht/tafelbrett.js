@@ -266,8 +266,8 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     if (zu || !schreibbar()) return;
     try { await store.tafel.abgeben(code); } catch (e) { meldung(fehlerText(sprache(), e)); }
   }
-  // «HTML» liefert Task 10 über den Haken ctx.exportHtml(code, gruppe): eine Zahl = nur diese Gruppe, null = alle (nur die Leitung,
-  // in der Übersicht). Ein abgelehntes Versprechen erscheint als Meldung. Ohne den Haken bleibt der Knopf ausgeschaltet.
+  // «HTML» über den Haken ctx.exportHtml(code, gruppe) aus main.js (js/ansicht/tafelexport.js): eine Zahl = nur diese Gruppe,
+  // null = alle (nur die Leitung, in der Übersicht). Ein abgelehntes Versprechen erscheint als Meldung. Ohne den Haken bleibt der Knopf aus.
   const exportiere = g => { try { Promise.resolve(ctx.exportHtml(code, g)).catch(e => meldung(fehlerText(sprache(), e))); } catch (e) { meldung(fehlerText(sprache(), e)); } };
   const htmlKnopf = (text, g) => (typeof ctx.exportHtml === 'function'
     ? h('button', { type: 'button', class: 'tbr-knopf', onclick: () => exportiere(g) }, text)
@@ -290,6 +290,10 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
         gesperrt ? h('span', { class: 'tbr-stand' }, sitzung.status !== 'offen' ? T('brett.beendetKurz') : T('brett.abgegebenKurz')) : null,
         h('span', { class: 'tbr-platz' }),
         leitung && abgegeben ? h('button', { type: 'button', class: 'tbr-knopf', onclick: wiederOeffnen }, T('brett.wiederOeffnen')) : null,
+        leitung ? [
+          h('a', { class: 'tbr-knopf', href: `#/tafel/${code}/${gruppe}/druck` }, T('brett.pdf')),
+          htmlKnopf(T('brett.html'), gruppe),
+        ] : null,
         !leitung && schreibbar() ? h('button', { type: 'button', class: 'tbr-knopf', onclick: abgeben }, T('brett.abgeben')) : null,
         !leitung && abgegeben && sitzung.status === 'offen' ? [
           h('a', { class: 'tbr-knopf', href: adresse + '/druck' }, T('brett.pdf')),

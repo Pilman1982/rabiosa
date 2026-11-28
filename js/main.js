@@ -3,7 +3,7 @@ import { waehleStore, istDemo } from './store/index.js';
 import { h, leere } from './ui.js';
 import { t } from './i18n.js';
 import { route } from './route.js';
-import { VARIANTE } from './variante.js';
+import { VARIANTE, zeigeWhiteboard } from './variante.js';
 
 const wurzel = document.getElementById('app');
 let abbau = null;
@@ -38,8 +38,14 @@ const ANSICHTEN = {
   tafelbrett: () => import('./ansicht/tafelbrett.js'),
   tafeluebersicht: () => import('./ansicht/tafeluebersicht.js'),
   tafelzeigen: () => import('./ansicht/tafelzeigen.js'),
-  // Weitere Whiteboard-Ansichten (tafeldruck …) folgen; bis dahin gilt die Startseite.
+  tafeldruck: () => import('./ansicht/tafeldruck.js'),
 };
+
+// Whiteboard herunterladen als HTML (Übersicht und Board): gruppe === null = alle Gruppen (nur die Leitung), eine Zahl = nur diese.
+// Nur in der Fassung der Dozierenden; das Modul wird erst beim Klick geladen.
+if (zeigeWhiteboard(VARIANTE)) {
+  ctx.exportHtml = (code, gruppe) => import('./ansicht/tafelexport.js').then(m => m.exportiereHtml(store, ctx.sprache, code, gruppe));
+}
 
 let lauf = 0;
 async function zeige() {
