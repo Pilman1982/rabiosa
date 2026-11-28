@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { erstelleDemoStore } from '../js/store/demo.js';
 import { SERVERZEIT } from '../js/store/gemeinsam.js';
 import { eindeutigeNamen } from '../js/logik/spiel.js';
+import { sitzungAusVorlage, beispielTafel } from '../js/logik/tafel.js';
 
 function nachbau() {
   const daten = new Map();
@@ -186,4 +187,106 @@ test('Ordner: leere Liste pro Konto, verschieben behält geaendert', async () =>
   await store.konto.registrieren({ name: 'Ben', email: 'b@b.ch', passwort: '12345678', code: 'demo' });
   assert.deepEqual(await store.ordner.laden(), [], 'Jede Person hat ihre eigene Liste');
   assert.equal(await fehlerCode(store.quiz.verschieben(id, { fach: 'X', ordner: '' })), 'verboten');
+});
+
+// Lehrperson und Gast sind zwei Stores auf denselben Daten: der Gast-Store sieht das Konto und die
+// Gast-Kennung («rabiosa-gast») nicht, sondern hat seine eigenen; so ist er ein anderes Gerät.
+function gastNachbau(daten, kennung, name = 'rabiosa-demo') {
+  const eigen = new Map();
+  const privat = k => k === 'rabiosa-gast' || k === name + ':konto';
+  const speicher = {
+    getItem: k => { const m = privat(k) ? eigen : daten; return m.has(k) ? m.get(k) : null; },
+    setItem: (k, v) => { (privat(k) ? eigen : daten).set(k, String(v)); },
+    removeItem: k => { (privat(k) ? eigen : daten).delete(k); },
+    key: i => [...daten.keys()][i] ?? null,
+    get length() { return daten.size; },
+  };
+  eigen.set('rabiosa-gast', kennung);
+  return erstelleDemoStore({ speicher, kanal: null, jetzt: () => 1_000_000, name });
+}
+async function tafelMitLeitung(gruppen = ['A', 'B']) {
+  const n = nachbau();
+  await n.store.konto.registrieren({ name: 'Anna', email: 'a@b.ch', passwort: '12345678', code: 'demo' });
+  const code = await n.store.tafel.erstellen(sitzungAusVorlage({ ...beispielTafel('de'), id: 'q1' }, gruppen, 'IGNORIERT'));
+  return { ...n, code, gast: kennung => gastNachbau(n.daten, kennung) };
+}
+const klein = () => new Blob(['x'], { type: 'image/png' });
+
+test('Tafel: erstellen, beitreten, Element live, gleiche Kennung = ein Element (Review Focus 1, 2)', async () => {
+  const { store } = nachbau();
+  await store.konto.registrieren({ name: 'Anna', email: 'a@b.ch', passwort: '12345678', code: 'demo' });
+  const code = await store.tafel.erstellen(sitzungAusVorlage({ ...beispielTafel('de'), id: 'q1' }, ['A', 'B'], 'IGNORIERT'));
+  assert.match(code, /^\d{6}$/);
+  assert.equal((await store.tafel.nachsehen(code)).gruppen.length, 2);
+  await store.tafel.beitreten(code, { gruppe: 1, name: 'Lena' });
+  await store.tafel.beitreten(code, { gruppe: 1, name: 'Lena' });
+  const mitglieder = []; store.tafel.mitgliederBeobachten(code, null, l => mitglieder.push(l)); await tick();
+  assert.equal(mitglieder.at(-1).length, 1, 'wieder beitreten legt keinen zweiten Eintrag an');
+  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 1, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' });
+  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 1, art: 'zettel', x: 50, y: 0, b: 200, h: 120, text: 'b' });
+  const el = []; store.tafel.elementeBeobachten(code, 1, l => el.push(l)); await tick();
+  assert.equal(el.at(-1).length, 1); assert.equal(el.at(-1)[0].text, 'b');
+});
+
+test('Tafel: gesperrte Gruppe und beendete Sitzung verweigern mit «abgegeben» (Review Focus 4)', async () => {
+  const { store, code, gast } = await tafelMitLeitung();
+  const g0 = gast('g-null'), g1 = gast('g-eins');
+  await g0.tafel.beitreten(code, { gruppe: 0, name: 'Lena' });
+  await g1.tafel.beitreten(code, { gruppe: 1, name: 'Ben' });
+  const el = { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' };
+  await g0.tafel.elementSpeichern(code, el);
+  await g0.tafel.abgeben(code);
+  assert.deepEqual((await store.tafel.nachsehen(code)).gesperrt, [0]);
+  await g1.tafel.abgeben(code);
+  assert.deepEqual((await store.tafel.nachsehen(code)).gesperrt, [0, 1], 'jede Gruppe gibt nur sich selbst ab');
+  await store.tafel.aktualisieren(code, { gesperrt: [0] });
+  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { ...el, text: 'b' })), 'abgegeben');
+  await store.tafel.elementSpeichern(code, { ...el, text: 'von der Leitung' });
+  assert.equal((await store.tafel.nachsehen(code)).gesperrt.length, 1);
+  await store.tafel.aktualisieren(code, { status: 'beendet' });
+  const gesehen = []; g1.tafel.elementeBeobachten(code, 1, l => gesehen.push(l)); await tick();
+  assert.deepEqual(gesehen.at(-1), []);
+  assert.equal(await fehlerCode(g1.tafel.elementSpeichern(code, { ...el, id: 'e2', gruppe: 1 })), 'abgegeben');
+  assert.equal(await fehlerCode(g1.tafel.abgeben(code)), 'abgegeben');
+});
+
+test('Tafel: Bilder zählen, Grenze 40, Löschen gibt Platz frei, Datei weg', async () => {
+  const { store, code } = await tafelMitLeitung();
+  const zaehler = []; store.tafel.zaehlerBeobachten(code, 0, z => zaehler.push(z)); await tick();
+  assert.deepEqual(zaehler.at(-1), { bilder: 0, bytes: 0, letztes: '' });
+  let letztes;
+  for (let i = 0; i < 40; i++) {
+    letztes = await store.tafel.bildHochladen(code, { id: 'b' + i, gruppe: 0, art: 'bild', x: 0, y: 0, b: 100, h: 100 }, klein());
+  }
+  await tick();
+  assert.equal(zaehler.at(-1).bilder, 40);
+  assert.equal(zaehler.at(-1).bytes, 40);
+  assert.equal(zaehler.at(-1).letztes, 'b39');
+  assert.equal(letztes.bildBytes, 1);
+  assert.equal(await fehlerCode(store.tafel.bildHochladen(code, { id: 'b40', gruppe: 0, art: 'bild' }, klein())), 'grenze');
+  assert.equal((await store.tafel.bildLaden(letztes.bildPfad)).size, 1);
+  await store.tafel.elementLoeschen(code, letztes);
+  await tick();
+  assert.equal(zaehler.at(-1).bilder, 39);
+  assert.equal(await store.tafel.bildLaden(letztes.bildPfad), null);
+  assert.equal(await fehlerCode(store.tafel.elementSpeichern(code, { id: 'neu', gruppe: 0, art: 'bild' })), 'verboten', 'Bilder nur über bildHochladen');
+  await store.tafel.bildHochladen(code, { id: 'b40', gruppe: 0, art: 'bild' }, klein());
+});
+
+test('Tafel: fremde Gruppe sieht und ändert nichts, Leitung sieht alles', async () => {
+  const { store, code, gast } = await tafelMitLeitung();
+  const g0 = gast('g-null');
+  await g0.tafel.beitreten(code, { gruppe: 0, name: 'Lena' });
+  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, text: 'a' });
+  await store.tafel.elementSpeichern(code, { id: 'e2', gruppe: 1, art: 'zettel', x: 0, y: 0, text: 'b' });
+  const fremd = []; g0.tafel.elementeBeobachten(code, 1, l => fremd.push(l));
+  const eigen = []; g0.tafel.elementeBeobachten(code, 0, l => eigen.push(l));
+  const alle = []; store.tafel.elementeBeobachten(code, null, l => alle.push(l));
+  await tick();
+  assert.deepEqual(fremd.at(-1), []);
+  assert.equal(eigen.at(-1).length, 1);
+  assert.equal(alle.at(-1).length, 2);
+  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e3', gruppe: 1, art: 'zettel', x: 0, y: 0 })), 'verboten');
+  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e2', gruppe: 0, art: 'zettel', x: 0, y: 0 })), 'verboten', 'fremdes Element nicht übernehmen');
+  assert.throws(() => g0.tafel.mitgliederBeobachten(code, null, () => {}), { code: 'verboten' });
 });
