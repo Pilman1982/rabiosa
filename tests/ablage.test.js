@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner } from '../js/logik/ablage.js';
+import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX } from '../js/logik/ablage.js';
 
 const q = (titel, fach, ordner, mehr = {}) => ({ id: titel, titel, fach, ordner, autor: 'Anna Muster', fragen: [], ...mehr });
 
@@ -83,4 +83,75 @@ test('suche: kaputte Einträge (ohne Fragenliste, ohne Titel) werfen nicht', () 
 test('bekannteOrdner: jede Ablage einmal, in sauberer Schreibweise, sortiert', () => {
   const alle = [q('A', 'K', ' HS26 / Final'), q('B', 'K', 'hs26/final'), q('C', 'K', 'FS27'), q('D', 'K', '')];
   assert.deepEqual(bekannteOrdner(alle), ['FS27', 'HS26/Final']);
+});
+
+// ---------- Studio-Ordnung: Arten, leere Ordner, Umbenennen ----------
+
+test('artVon / nachArt / artZahlen: ohne gültige Art ist es ein Quiz', () => {
+  const alle = [q('A', 'K', ''), q('B', 'K', '', { art: 'praesentation' }), q('C', 'K', '', { art: 'whiteboard' }), q('D', 'K', '', { art: 'unsinn' })];
+  assert.deepEqual(alle.map(artVon), ['quiz', 'praesentation', 'whiteboard', 'quiz']);
+  assert.deepEqual(nachArt(alle, 'quiz').map(x => x.id), ['A', 'D']);
+  assert.equal(nachArt(alle, 'alle').length, 4);
+  assert.deepEqual(artZahlen(alle), { alle: 4, quiz: 2, praesentation: 1, whiteboard: 1 });
+});
+
+test('nachArt nach suche: nur Treffer der gewählten Art', () => {
+  const alle = [q('Saison Quiz', 'K', ''), q('Saison Folien', 'K', '', { art: 'praesentation' })];
+  assert.deepEqual(nachArt(suche(alle, 'saison'), 'praesentation').map(x => x.id), ['Saison Folien']);
+});
+
+test('zuletzt: neuste zuerst, ohne geaendert hinten, höchstens n', () => {
+  const alle = [q('A', 'K', '', { geaendert: 5 }), q('B', 'K', ''), q('C', 'K', '', { geaendert: 9 }), q('D', 'K', '', { geaendert: 7 })];
+  assert.deepEqual(zuletzt(alle, 3).map(x => x.id), ['C', 'D', 'A']);
+  assert.deepEqual(zuletzt(alle).map(x => x.id), ['C', 'D', 'A', 'B']);
+});
+
+test('inhaltVon mit leeren Ordnern: erscheinen mit 0, Zwischenstufen inbegriffen', () => {
+  const alle = [q('A', 'KUT', 'HS26')];
+  const leere = [{ fach: 'KUT', ordner: 'HS26/Final' }, { fach: 'KUT', ordner: 'FS27/Midterm' }, { fach: 'HYLM', ordner: '' }];
+  assert.deepEqual(inhaltVon(alle, [], 'Ohne Fach', leere).ordner, [{ name: 'HYLM', anzahl: 0 }, { name: 'KUT', anzahl: 1 }]);
+  assert.deepEqual(inhaltVon(alle, ['KUT'], 'Ohne Fach', leere).ordner, [{ name: 'FS27', anzahl: 0 }, { name: 'HS26', anzahl: 1 }]);
+  assert.deepEqual(inhaltVon(alle, ['KUT', 'HS26'], 'Ohne Fach', leere).ordner, [{ name: 'Final', anzahl: 0 }]);
+  assert.deepEqual(inhaltVon(alle, ['KUT', 'HS26'], 'Ohne Fach', leere).quizze.map(x => x.id), ['A']);
+});
+
+test('zielVon / istUnter: Ohne Fach wird zu leerem Fach', () => {
+  assert.deepEqual(zielVon(['KUT', 'HS26', 'Final'], 'Ohne Fach'), { fach: 'KUT', ordner: 'HS26/Final' });
+  assert.deepEqual(zielVon(['Ohne Fach', 'X'], 'Ohne Fach'), { fach: '', ordner: 'X' });
+  assert.deepEqual(zielVon([], 'Ohne Fach'), { fach: '', ordner: '' });
+  assert.ok(istUnter(q('A', 'kut', 'hs26/final'), ['KUT', 'HS26'], 'Ohne Fach'));
+  assert.ok(!istUnter(q('A', 'KUT', 'HS26x'), ['KUT', 'HS26'], 'Ohne Fach'));
+});
+
+test('ordnerNameFehler: leer, Trennzeichen, Doppel nach Schreibweise, Tiefe, Länge', () => {
+  assert.equal(ordnerNameFehler('  ', ['KUT'], []), 'leer');
+  assert.equal(ordnerNameFehler('a/b', ['KUT'], []), 'zeichen');
+  assert.equal(ordnerNameFehler('a\\b', ['KUT'], []), 'zeichen');
+  assert.equal(ordnerNameFehler('a > b', ['KUT'], []), 'zeichen');
+  assert.equal(ordnerNameFehler('hs26', ['KUT'], ['HS26']), 'doppelt');
+  assert.equal(ordnerNameFehler('X', ['KUT', '1', '2', '3', '4'], []), 'tief');
+  assert.equal(ordnerNameFehler('x'.repeat(81), ['KUT'], []), 'lang');
+  assert.equal(ordnerNameFehler('x'.repeat(41), [], []), 'lang', 'Auf oberster Stufe ist der Name ein Fach');
+  assert.equal(ordnerNameFehler('Final', ['KUT', 'HS26'], ['Midterm']), null);
+});
+
+test('umbenennen: ändert alle Inhalte und leeren Ordner darunter, sonst nichts', () => {
+  const alle = [q('A', 'KUT', 'HS26'), q('B', 'KUT', 'HS26/Final'), q('C', 'KUT', 'HS260'), q('D', 'HYLM', 'HS26')];
+  const leere = [{ fach: 'KUT', ordner: 'HS26/Leer' }, { fach: 'HYLM', ordner: 'HS26/Leer' }];
+  const r = umbenennen(alle, leere, ['KUT', 'HS26'], 'HS 2026', 'Ohne Fach');
+  assert.deepEqual(r.aenderungen, [{ id: 'A', fach: 'KUT', ordner: 'HS 2026' }, { id: 'B', fach: 'KUT', ordner: 'HS 2026/Final' }]);
+  assert.deepEqual(r.leere, [{ fach: 'KUT', ordner: 'HS 2026/Leer' }, { fach: 'HYLM', ordner: 'HS26/Leer' }]);
+  assert.throws(() => umbenennen(alle, leere, ['KUT'], 'X', 'Ohne Fach'));
+});
+
+test('ordnerEntfernen / leereAufraeumen / alleOrdner', () => {
+  const leere = [{ fach: 'KUT', ordner: 'A' }, { fach: 'KUT', ordner: 'A/B' }, { fach: 'kut', ordner: 'a' }, { fach: 'KUT', ordner: 'Voll' }];
+  assert.deepEqual(ordnerEntfernen(leere, ['KUT', 'A'], 'Ohne Fach'), [{ fach: 'KUT', ordner: 'Voll' }]);
+  assert.deepEqual(leereAufraeumen(leere, [q('X', 'KUT', 'Voll')], 'Ohne Fach'), [{ fach: 'KUT', ordner: 'A' }, { fach: 'KUT', ordner: 'A/B' }]);
+  const viele = Array.from({ length: LEERE_MAX + 5 }, (_, i) => ({ fach: 'K', ordner: 'O' + i }));
+  const rest = leereAufraeumen(viele, [], 'Ohne Fach');
+  assert.equal(rest.length, LEERE_MAX);
+  assert.equal(rest.at(-1).ordner, 'O' + (LEERE_MAX + 4));
+  assert.deepEqual(alleOrdner([q('Z', '', 'X')], [{ fach: 'KUT', ordner: 'HS26/Final' }], 'Ohne Fach'),
+    [['KUT'], ['KUT', 'HS26'], ['KUT', 'HS26', 'Final'], ['Ohne Fach'], ['Ohne Fach', 'X']]);
 });
