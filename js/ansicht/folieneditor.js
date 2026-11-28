@@ -1,5 +1,5 @@
 // Editor für Präsentationen: Folien erfassen, ordnen, laufend speichern; rechts eine Vorschau wie am Beamer.
-import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN } from '../ui.js';
+import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN, vorgeschlageneOrdner } from '../ui.js';
 import { t } from '../i18n.js';
 import { FOLIEN, WORTE_MAX, neueFolie, folienFehler, oeffentlicheFolie, istPraesentation } from '../logik/praesentation.js';
 import { verkleinere } from './editor.js';
@@ -182,11 +182,6 @@ export function zeige(wurzel, ctx, quizId) {
     zeichneVorschau();
   }
 
-  function bekannteOrdner() {
-    try { const l = JSON.parse(sessionStorage.getItem('rabiosa-ordner') || '[]'); return Array.isArray(l) ? l.filter(o => typeof o === 'string').slice(0, 200) : []; }
-    catch { return []; }
-  }
-
   function zeichneAlles() {
     const sprachwahl = h('select', { class: 'feld' }, h('option', { value: 'de' }, T('editor.deutsch')), h('option', { value: 'en' }, T('editor.englisch')));
     sprachwahl.value = p.sprache || 'de';
@@ -201,7 +196,7 @@ export function zeige(wurzel, ctx, quizId) {
         h('label', null, h('span', { class: 'lab' }, T('editor.fach')), eingabe(p.fach, v => { p.fach = v; }, { maxlength: '40' })),
         h('label', null, h('span', { class: 'lab' }, T('editor.ordner')),
           eingabe(p.ordner, v => { p.ordner = v; }, { maxlength: '80', placeholder: T('editor.ordnerBeispiel'), list: 'ordner-vorschlaege', autocomplete: 'off' })),
-        h('datalist', { id: 'ordner-vorschlaege' }, bekannteOrdner().map(o => h('option', { value: o }))),
+        h('datalist', { id: 'ordner-vorschlaege' }, vorgeschlageneOrdner().map(o => h('option', { value: o }))),
         h('label', null, h('span', { class: 'lab' }, T('editor.sprache')), sprachwahl)),
       h('p', { class: 'hilfe' }, T('editor.ordnerHilfe')),
       maengelEl,

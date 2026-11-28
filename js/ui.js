@@ -103,3 +103,9 @@ export function fehlerText(sprache, e) {
 export function datum(sprache, ms) {
   return new Date(ms).toLocaleString(sprache === 'en' ? 'en-GB' : 'de-CH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+/** Ordner, die schon jemand benutzt (das Studio merkt sie sich beim Laden der Listen): Vorschläge fürs Ordnerfeld der Editoren. */
+export function vorgeschlageneOrdner() {
+  try { const liste = JSON.parse(sessionStorage.getItem('rabiosa-ordner') || '[]'); return Array.isArray(liste) ? liste.filter(o => typeof o === 'string').slice(0, 200) : []; }
+  catch { return []; }
+}

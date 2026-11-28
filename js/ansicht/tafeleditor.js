@@ -1,6 +1,6 @@
 // Editor für Whiteboard-Vorlagen: Auftrag, Gruppen-Vorgabe und Zonen erfassen, laufend speichern;
 // rechts eine Vorschau des Rasters mit den Zonentiteln.
-import { h, marke, meldung, fehlerText } from '../ui.js';
+import { h, marke, meldung, fehlerText, vorgeschlageneOrdner } from '../ui.js';
 import { t } from '../i18n.js';
 import { istWhiteboard, tafelFehler, zonenRaster, ZONEN_MAX, GRUPPEN_MIN, GRUPPEN_MAX, GRUPPEN_VORGABE,
   AUFTRAG_MAX, ZONE_TITEL_MAX, ZONE_HINWEIS_MAX } from '../logik/tafel.js';
@@ -90,11 +90,6 @@ export function zeige(wurzel, ctx, quizId) {
         : null);
   }
 
-  function bekannteOrdner() {
-    try { const l = JSON.parse(sessionStorage.getItem('rabiosa-ordner') || '[]'); return Array.isArray(l) ? l.filter(o => typeof o === 'string').slice(0, 200) : []; }
-    catch { return []; }
-  }
-
   function zeichneAlles() {
     p.gruppenVorgabe = Number.isInteger(p.gruppenVorgabe) ? p.gruppenVorgabe : GRUPPEN_VORGABE;
     const sprachwahl = h('select', { class: 'feld' }, h('option', { value: 'de' }, T('editor.deutsch')), h('option', { value: 'en' }, T('editor.englisch')));
@@ -115,7 +110,7 @@ export function zeige(wurzel, ctx, quizId) {
         h('label', null, h('span', { class: 'lab' }, T('editor.fach')), eingabe(p.fach, v => { p.fach = v; }, { maxlength: '40' })),
         h('label', null, h('span', { class: 'lab' }, T('editor.ordner')),
           eingabe(p.ordner, v => { p.ordner = v; }, { maxlength: '80', placeholder: T('editor.ordnerBeispiel'), list: 'ordner-vorschlaege', autocomplete: 'off' })),
-        h('datalist', { id: 'ordner-vorschlaege' }, bekannteOrdner().map(o => h('option', { value: o }))),
+        h('datalist', { id: 'ordner-vorschlaege' }, vorgeschlageneOrdner().map(o => h('option', { value: o }))),
         h('label', null, h('span', { class: 'lab' }, T('editor.sprache')), sprachwahl),
         h('label', { class: 'schalter' }, frei, T('te.freigeben'))),
       h('p', { class: 'hilfe' }, T('editor.ordnerHilfe')),

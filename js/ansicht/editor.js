@@ -1,5 +1,5 @@
 // Quiz-Editor: Fragen erfassen, ordnen und laufend speichern.
-import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN } from '../ui.js';
+import { h, marke, meldung, fehlerText, rueckfrage, BUCHSTABEN, vorgeschlageneOrdner } from '../ui.js';
 import { t } from '../i18n.js';
 import { TYPEN, ZEIT_WAHL, neueFrage, quizFehler, zufallsId, clocheFelder, zuVieleFuerEcken, THEMA_MAX } from '../logik/quiz.js';
 import { leseZahl } from '../logik/pruefen.js';
@@ -217,12 +217,6 @@ export function zeige(wurzel, ctx, quizId) {
       h('p', { class: 'hilfe' }, T('editor.clocheHilfe')));
   }
 
-  /** Ordner, die schon jemand benutzt (das Studio merkt sie sich beim Laden der Listen). */
-  function bekannteOrdner() {
-    try { const liste = JSON.parse(sessionStorage.getItem('rabiosa-ordner') || '[]'); return Array.isArray(liste) ? liste.filter(o => typeof o === 'string').slice(0, 200) : []; }
-    catch { return []; }
-  }
-
   function zeichneAlles() {
     const sprachwahl = h('select', { class: 'feld' }, h('option', { value: 'de' }, T('editor.deutsch')), h('option', { value: 'en' }, T('editor.englisch')));
     sprachwahl.value = quiz.sprache || 'de';
@@ -237,7 +231,7 @@ export function zeige(wurzel, ctx, quizId) {
         h('label', null, h('span', { class: 'lab' }, T('editor.fach')), eingabe(quiz.fach, v => { quiz.fach = v; }, { maxlength: '40' })),
         h('label', null, h('span', { class: 'lab' }, T('editor.ordner')),
           eingabe(quiz.ordner, v => { quiz.ordner = v; }, { maxlength: '80', placeholder: T('editor.ordnerBeispiel'), list: 'ordner-vorschlaege', autocomplete: 'off' })),
-        h('datalist', { id: 'ordner-vorschlaege' }, bekannteOrdner().map(o => h('option', { value: o }))),
+        h('datalist', { id: 'ordner-vorschlaege' }, vorgeschlageneOrdner().map(o => h('option', { value: o }))),
         h('label', null, h('span', { class: 'lab' }, T('editor.sprache')), sprachwahl)),
       h('p', { class: 'hilfe' }, T('editor.ordnerHilfe')),
       maengelEl,
