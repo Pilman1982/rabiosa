@@ -5,6 +5,7 @@
 // «erstellt», «frageStart», «beigetreten» und «zeit» Zeitstempel des Servers.
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
 import { ausRest, restAdresse } from './rest.js';
+import { saubereOrdnerliste } from '../logik/ablage.js';
 
 /** Version des Firebase JS SDK (modulare API). Nur hier ändern. */
 export const FIREBASE_VERSION = '13.4.0';
@@ -89,6 +90,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   // ----- Pfade -----
   const profilRef = uid => doc(db, 'dozierende', uid);
   const quizRef = id => doc(db, 'quizze', String(id));
+  const ordnerRef = uid => doc(db, 'ordnerlisten', String(uid));
   const bildRef = (quizId, bildId) => doc(db, 'quizze', String(quizId), 'bilder', String(bildId));
   const spielRef = code => doc(db, 'spiele', String(code));
   const privatRef = code => doc(db, 'spiele', String(code), 'privat', 'zustand');
@@ -369,6 +371,29 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         if (!quizId || !bildId) return;
         bilder.delete(`${quizId}/${bildId}`);
         await versuche(() => deleteDoc(bildRef(quizId, bildId)));
+      },
+      /** Nur Fach und Ordner ändern; «geaendert» bleibt, damit «Zuletzt bearbeitet» stimmt. */
+      async verschieben(id, { fach, ordner }) {
+        const user = await brauchtKonto();
+        if (!id) throw fehler('nichtGefunden');
+        const snap = await versuche(() => getDoc(quizRef(id)));
+        if (!snap.exists()) throw fehler('nichtGefunden');
+        if (snap.data().besitzer !== user.uid) throw fehler('verboten');
+        await versuche(() => updateDoc(quizRef(id), { fach: String(fach ?? ''), ordner: String(ordner ?? '') }));
+      },
+    },
+
+    // Leere Ordner im Studio: ein Dokument pro Person, ordnerlisten/{uid} { liste }.
+    ordner: {
+      async laden() {
+        const user = await brauchtKonto();
+        const snap = await versuche(() => getDoc(ordnerRef(user.uid)));
+        const liste = snap.exists() ? snap.data().liste : null;
+        return Array.isArray(liste) ? liste : [];
+      },
+      async speichern(liste) {
+        const user = await brauchtKonto();
+        await versuche(() => setDoc(ordnerRef(user.uid), { liste: saubereOrdnerliste(liste) }));
       },
     },
 

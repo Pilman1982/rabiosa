@@ -168,3 +168,22 @@ test('eindeutigeNamen: doppelte Namen bekommen in der Reihenfolge des Beitritts 
   ];
   assert.deepEqual(eindeutigeNamen(s).map(x => [x.pid, x.name]), [['1', 'Anna'], ['2', 'Ben'], ['3', 'anna 2'], ['4', 'Anna 3']]);
 });
+
+test('Ordner: leere Liste pro Konto, verschieben behält geaendert', async () => {
+  const { store, vor } = nachbau();
+  await store.konto.registrieren({ name: 'Anna', email: 'a@b.ch', passwort: '12345678', code: 'demo' });
+  assert.deepEqual(await store.ordner.laden(), []);
+  await store.ordner.speichern([{ fach: 'KUT', ordner: 'HS26', fremd: 1 }]);
+  assert.deepEqual(await store.ordner.laden(), [{ fach: 'KUT', ordner: 'HS26' }]);
+  const id = await store.quiz.speichern({ titel: 'T', fragen: [], fach: '', ordner: '' });
+  const vorher = (await store.quiz.laden(id)).geaendert;
+  vor(5000);
+  await store.quiz.verschieben(id, { fach: 'KUT', ordner: 'HS26/Final' });
+  const nachher = await store.quiz.laden(id);
+  assert.equal(nachher.fach, 'KUT'); assert.equal(nachher.ordner, 'HS26/Final'); assert.equal(nachher.geaendert, vorher);
+  assert.equal(await fehlerCode(store.quiz.verschieben('gibtsnicht', { fach: '', ordner: '' })), 'nichtGefunden');
+  await store.konto.abmelden();
+  await store.konto.registrieren({ name: 'Ben', email: 'b@b.ch', passwort: '12345678', code: 'demo' });
+  assert.deepEqual(await store.ordner.laden(), [], 'Jede Person hat ihre eigene Liste');
+  assert.equal(await fehlerCode(store.quiz.verschieben(id, { fach: 'X', ordner: '' })), 'verboten');
+});

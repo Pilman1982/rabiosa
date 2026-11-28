@@ -187,3 +187,7 @@ export function alleOrdner(quizze, leere, ohneFach) {
   };
   return [...pfade.values()].sort(vergleiche);
 }
+
+/** Was in die Datenbank geht: nur { fach, ordner } als Text in den Grenzen des Editors, höchstens LEERE_MAX. */
+export const saubereOrdnerliste = liste => (Array.isArray(liste) ? liste : []).slice(-LEERE_MAX)
+  .map(e => ({ fach: String(e?.fach ?? '').slice(0, FACH_LAENGE), ordner: String(e?.ordner ?? '').slice(0, ORDNER_LAENGE) }));

@@ -1,6 +1,7 @@
 // Demo-Speicher: alles im Browser (localStorage), mehrere Fenster sprechen über BroadcastChannel.
 // Dient zum Ausprobieren und Testen ohne Firebase. Einladungscode im Demo-Modus: «demo».
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
+import { saubereOrdnerliste } from '../logik/ablage.js';
 
 export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, jetzt = Date.now, name = 'rabiosa-demo' } = {}) {
   const P = name + ':';
@@ -108,6 +109,28 @@ export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, j
       },
       async bildLaden(quizId, bildId) { return lies(`bild:${quizId}/${bildId}`); },
       async bildLoeschen(quizId, bildId) { entferne(`bild:${quizId}/${bildId}`); },
+      /** Nur Fach und Ordner ändern; «geaendert» bleibt, damit «Zuletzt bearbeitet» stimmt. */
+      async verschieben(id, { fach, ordner }) {
+        const k = brauchtKonto();
+        const alle = lies('quizze', {});
+        if (!alle[id]) throw fehler('nichtGefunden');
+        if (alle[id].besitzer !== k.uid) throw fehler('verboten');
+        alle[id] = { ...alle[id], fach: String(fach ?? ''), ordner: String(ordner ?? '') };
+        schreib('quizze', alle);
+      },
+    },
+
+    // Leere Ordner im Studio, eine Liste pro Person.
+    ordner: {
+      async laden() {
+        const k = brauchtKonto();
+        const liste = lies('ordner:' + k.uid, []);
+        return Array.isArray(liste) ? liste : [];
+      },
+      async speichern(liste) {
+        const k = brauchtKonto();
+        schreib('ordner:' + k.uid, saubereOrdnerliste(liste));
+      },
     },
 
     rueckblick: {

@@ -142,6 +142,15 @@ service cloud.firestore {
         && request.resource.data.besitzer == resource.data.besitzer && freigeschaltet();
     }
 
+    // ----- Leere Ordner im Studio: nur die eigene Liste. 300 = LEERE_MAX in js/logik/ablage.js. -----
+    match /ordnerlisten/{uid} {
+      allow get: if angemeldet() && request.auth.uid == uid && freigeschaltet();
+      allow create, update: if angemeldet() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['liste'])
+        && request.resource.data.liste is list && request.resource.data.liste.size() <= 300
+        && freigeschaltet();
+    }
+
     // ----- Spiel: der öffentliche Stand. Die Kennung ist der sechsstellige Code. -----
     match /spiele/{code} {
       // Wer den Code kennt, darf den Stand lesen – auch ohne Anmeldung (Handys der Studierenden).

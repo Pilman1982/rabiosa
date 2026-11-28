@@ -155,3 +155,15 @@ test('ordnerEntfernen / leereAufraeumen / alleOrdner', () => {
   assert.deepEqual(alleOrdner([q('Z', '', 'X')], [{ fach: 'KUT', ordner: 'HS26/Final' }], 'Ohne Fach'),
     [['KUT'], ['KUT', 'HS26'], ['KUT', 'HS26', 'Final'], ['Ohne Fach'], ['Ohne Fach', 'X']]);
 });
+
+test('Regeln: ordnerlisten nur für die eigene Person, Grenze wie LEERE_MAX', async () => {
+  const { readFileSync } = await import('node:fs');
+  const regeln = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+  const start = regeln.indexOf('match /ordnerlisten/{uid}');
+  assert.ok(start > 0, 'Block ordnerlisten fehlt');
+  const block = regeln.slice(start, regeln.indexOf('}', regeln.indexOf('allow create, update', start)) + 1);
+  assert.ok(block.includes('request.auth.uid == uid'));
+  assert.equal(Number(block.match(/liste\.size\(\) <= (\d+)/)[1]), LEERE_MAX);
+  const speicher = readFileSync(new URL('../js/store/firebase.js', import.meta.url), 'utf8');
+  assert.ok(speicher.includes("doc(db, 'ordnerlisten', "), 'firebase.js muss dieselbe Sammlung benutzen');
+});
