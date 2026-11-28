@@ -1,5 +1,6 @@
 // Quiz und Fragen: Vorlagen, Prüfung, öffentliche Fassung ohne Lösung.
 import { istPraesentation, folienFehler } from './praesentation.js';
+import { istWhiteboard, tafelFehler } from './tafel.js';
 
 export const TYPEN = ['mc', 'mehrfach', 'wf', 'schaetz', 'reihe', 'kurz', 'umfrage'];
 export const ZEIT_MIN = 5, ZEIT_MAX = 240, ZEIT_VORGABE = 20;
@@ -26,6 +27,7 @@ const leer = s => typeof s !== 'string' || !s.trim();
 
 /** Liste der Mängel: [{ frage: Nummer | null, code }]. Leer = spielbar. */
 export function quizFehler(quiz) {
+  if (istWhiteboard(quiz)) return tafelFehler(quiz);   // Whiteboards haben Zonen und eigene Regeln
   if (istPraesentation(quiz)) return folienFehler(quiz);   // Präsentationen haben eigene Folien und eigene Regeln
   const fehler = [];
   if (leer(quiz.titel)) fehler.push({ frage: null, code: 'titel' });
