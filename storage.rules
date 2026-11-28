@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// Rabiosa Whiteboard – Sicherheitsregeln für Cloud Storage. Nur im Projekt der Dozierenden einspielen.
+// Bilder liegen unter tafeln/{code}/{gruppe}/{elementId}. Wer lesen und schreiben darf, entscheidet die Sitzung
+// in Firestore (Leitung, oder Mitglied dieser Gruppe bei offener Sitzung; Schreiben nur, solange nicht abgegeben).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /tafeln/{code}/{gruppe}/{datei} {
+      function t() { return firestore.get(/databases/(default)/documents/tafeln/$(code)).data; }
+      function ich() { return firestore.get(/databases/(default)/documents/tafeln/$(code)/mitglieder/$(request.auth.uid)).data; }
+      function leitung() { return t().hostUid == request.auth.uid; }
+      function mitglied() { return t().status == 'offen' && ich().gruppe == int(gruppe); }
+      allow read: if request.auth != null && (leitung() || mitglied());
+      allow create: if request.auth != null && (leitung() || (mitglied() && !(int(gruppe) in t().gesperrt)))
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp|gif)');
+      allow delete: if request.auth != null && (leitung() || mitglied());
+      allow update: if false;
+    }
+  }
+}

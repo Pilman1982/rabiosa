@@ -6,6 +6,7 @@
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
 import { ausRest, restAdresse } from './rest.js';
 import { saubereOrdnerliste } from '../logik/ablage.js';
+import { saeubereElement, bildErlaubt, NAME_MAX } from '../logik/tafel.js';
 
 /** Version des Firebase JS SDK (modulare API). Nur hier ändern. */
 export const FIREBASE_VERSION = '13.4.0';
@@ -17,6 +18,7 @@ const SCHLUESSEL_MIN = 20;          // wie in firestore.rules
 const STAPEL_GROSS = 200;           // Löschungen pro Stapel, wenn der Server gleiche Regel-Zugriffe nur einmal zählt
 const STAPEL_KLEIN = 10;            // sonst: höchstens 20 Regel-Zugriffe pro Stapel, bis zu 2 pro Löschung
 const AUFRAEUMEN_MAX = 3;           // alte Spiele pro Aufruf von aufraeumen()
+const TAFELBILDER_IM_KOPF = 60;     // so viele geladene Whiteboard-Bilder (Blob) merkt sich der Speicher
 
 const AUTH_FEHLER = {
   'auth/invalid-email': 'email',
@@ -44,7 +46,7 @@ const FIRESTORE_FEHLER = {
   'deadline-exceeded': 'netz',
 };
 
-const istVerweigert = e => !!e && (e.code === 'permission-denied' || e.code === 'unauthenticated');
+const istVerweigert = e => !!e && ['permission-denied', 'unauthenticated', 'storage/unauthorized', 'storage/unauthenticated'].includes(e.code);
 const istZeit = w => w != null && typeof w.toMillis === 'function';
 
 /** Macht aus einem Fehler von Firebase einen mit unserer Kennung. «ersatz» tauscht Kennungen je nach Aufruf. */
@@ -87,6 +89,17 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   const { doc, collection, query, where, limit, getDoc, getDocFromServer, getDocs, setDoc, updateDoc, deleteDoc,
     onSnapshot, writeBatch, serverTimestamp, Timestamp } = fs;
 
+  // Storage (Bilder des Whiteboards) wird erst gebraucht, wenn ein Bild kommt: kein Vorladen in index.html.
+  let storageLaden;
+  function storageSdk() {
+    storageLaden ||= (async () => {
+      let sdk;
+      try { sdk = await lade('storage'); } catch (e) { throw fehler('netz', e); }
+      return { sdk, speicher: sdk.getStorage(app) };
+    })().catch(e => { storageLaden = null; throw e; });
+    return storageLaden;
+  }
+
   // ----- Pfade -----
   const profilRef = uid => doc(db, 'dozierende', uid);
   const quizRef = id => doc(db, 'quizze', String(id));
@@ -97,6 +110,13 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   const spielerRef = (code, schluessel) => doc(db, 'spiele', String(code), 'spieler', String(schluessel));
   const spielerListe = code => collection(db, 'spiele', String(code), 'spieler');
   const antwortListe = code => collection(db, 'spiele', String(code), 'antworten');
+  const tafelRef = code => doc(db, 'tafeln', String(code));
+  const mitgliedRef = (code, uid) => doc(db, 'tafeln', String(code), 'mitglieder', String(uid));
+  const mitgliederListe = code => collection(db, 'tafeln', String(code), 'mitglieder');
+  const elementRef = (code, id) => doc(db, 'tafeln', String(code), 'elemente', String(id));
+  const elementeListe = code => collection(db, 'tafeln', String(code), 'elemente');
+  const zaehlerRef = (code, gruppe) => doc(db, 'tafeln', String(code), 'zaehler', String(gruppe));
+  const zaehlerListe = code => collection(db, 'tafeln', String(code), 'zaehler');
 
   // ----- Zeit -----
   // versatz = Serverzeit minus eigene Uhr. Wird einmal geschätzt, wenn ohnehin ein Zeitstempel des Servers
@@ -194,7 +214,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
 
   /** Liest, ob es das Profil gibt (= freigeschaltet), und meldet den Stand. Ein Lesezugriff. */
   async function kontoPruefen(user) {
-    if (!user) { kontoMelden(null); return; }
+    if (!user || user.isAnonymous) { kontoMelden(null); return; }   // Gäste (Whiteboard) sind im Studio nie angemeldet
     const lauf = ++kontoLauf;
     let freigeschaltet = false, name = user.displayName || '';
     try {
@@ -222,7 +242,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
 
   async function brauchtKonto() {
     await auth.authStateReady();
-    if (!auth.currentUser) throw fehler('verboten');
+    if (!auth.currentUser || auth.currentUser.isAnonymous) throw fehler('verboten');
     return auth.currentUser;
   }
 
@@ -246,6 +266,70 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
     bilder.delete(k);
     bilder.set(k, daten);
     if (bilder.size > BILDER_IM_KOPF) bilder.delete(bilder.keys().next().value);
+  }
+
+  /** Ein Dokument über die Web-Schnittstelle lesen (ohne Anmeldung, unabhängig von der Live-Verbindung). null = 404. */
+  async function restHolen(pfad) {
+    const abbruch = new AbortController();
+    const frist = setTimeout(() => abbruch.abort(), 8000);
+    try {
+      const antwort = await fetch(restAdresse(config, pfad), { cache: 'no-store', signal: abbruch.signal });
+      if (antwort.status === 404) return null;
+      if (!antwort.ok) throw fehler('netz');
+      return ausRest(await antwort.json());
+    } catch (e) { throw e && e.code ? e : fehler('netz', e); }
+    finally { clearTimeout(frist); }
+  }
+
+  // ----- Whiteboard: Hilfen -----
+  const tafelHost = new Map();        // code -> hostUid, aus allem, was wir von der Sitzung gesehen haben
+  const merkeTafel = t => { if (t && t.code && t.hostUid) tafelHost.set(String(t.code), t.hostUid); return t; };
+  const tafelAus = snap => merkeTafel({ ...mitZeiten(snap, ['erstellt']), code: snap.id });
+  const istKonto = () => !!auth.currentUser && !auth.currentUser.isAnonymous;
+  const zaehlerAus = d => ({ bilder: d?.bilder || 0, bytes: d?.bytes || 0, letztes: d?.letztes || '' });
+
+  /**
+   * Schreibvorgang auf dem Board. Verweigern die Regeln ihn, wird nachgesehen warum (wie spiel.beitreten):
+   * Sitzung weg = nichtGefunden; Mitglied der Gruppe, aber beendet oder gesperrt = abgegeben; sonst verboten.
+   */
+  async function tafelSchreiben(code, gruppe, aktion) {
+    try { return await aktion(); }
+    catch (e) {
+      if (!istVerweigert(e)) throw uebersetze(e);
+      let tafel = null, ich = null;
+      try {
+        const snap = await getDoc(tafelRef(code));
+        if (!snap.exists()) throw fehler('nichtGefunden', e);
+        tafel = snap.data();
+        const uid = auth.currentUser ? auth.currentUser.uid : null;
+        if (uid && tafel.hostUid !== uid) { const m = await getDoc(mitgliedRef(code, uid)); ich = m.exists() ? m.data() : null; }
+      } catch (e2) { if (e2 && e2.message === 'rabiosa:nichtGefunden') throw e2; /* unklar: bleibt bei «verboten» */ }
+      const eigene = !!ich && ich.gruppe === gruppe;
+      const zu = !!tafel && (tafel.status !== 'offen' || (tafel.gesperrt || []).includes(gruppe));
+      throw fehler(eigene && zu ? 'abgegeben' : 'verboten', e);
+    }
+  }
+
+  /** Startet einen Zuhörer erst, wenn die Anmeldung geklärt ist; gibt sofort die Stopp-Funktion zurück. */
+  function nachAnmeldung(start, ohneNutzer) {
+    let aktiv = true, stopp = null;
+    auth.authStateReady().then(() => {
+      if (!aktiv) return;
+      if (!auth.currentUser) { ohneNutzer(); return; }
+      stopp = start(auth.currentUser.uid);
+    });
+    return () => { aktiv = false; if (stopp) stopp(); };
+  }
+
+  const tafelBilder = new Map();      // Pfad -> Blob
+  function merkeTafelBild(pfad, blob) {
+    tafelBilder.delete(pfad);
+    tafelBilder.set(pfad, blob);
+    if (tafelBilder.size > TAFELBILDER_IM_KOPF) tafelBilder.delete(tafelBilder.keys().next().value);
+  }
+  async function dateiLoeschen(pfad) {
+    try { const { sdk, speicher } = await storageSdk(); await sdk.deleteObject(sdk.ref(speicher, pfad)); }
+    catch { /* gibt es nicht (mehr) oder nicht erlaubt: das Element ist trotzdem weg */ }
   }
 
   let verbindetNeu = false;
@@ -419,6 +503,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
           const code = spielCode();
           const ref = spielRef(code);
           if ((await versuche(() => getDoc(ref))).exists()) continue;   // Code ist vergeben
+          if ((await versuche(() => getDoc(tafelRef(code)))).exists()) continue;   // … oder gehört einem Whiteboard
           const t0 = Date.now();
           await versuche(() => setDoc(ref, { ...mitServerzeit(oeffentlich), code, erstellt: serverTimestamp() }));
           const t1 = Date.now();
@@ -446,17 +531,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
        * Der Stand jetzt, mit einer gewöhnlichen Web-Anfrage statt über die Live-Verbindung des SDK. So klappt es
        * auch, wenn die Live-Verbindung still steht. Ein Lesezugriff. null = Spiel gibt es nicht.
        */
-      async nachsehen(code) {
-        const abbruch = new AbortController();
-        const frist = setTimeout(() => abbruch.abort(), 8000);
-        try {
-          const antwort = await fetch(restAdresse(config, 'spiele/' + encodeURIComponent(String(code))), { cache: 'no-store', signal: abbruch.signal });
-          if (antwort.status === 404) return null;
-          if (!antwort.ok) throw fehler('netz');
-          return ausRest(await antwort.json());
-        } catch (e) { throw e && e.code ? e : fehler('netz', e); }
-        finally { clearTimeout(frist); }
-      },
+      nachsehen: code => restHolen('spiele/' + encodeURIComponent(String(code))),
       async privatLaden(code) {
         const snap = await versuche(() => getDoc(privatRef(code)));
         return snap.exists() ? snap.data() : {};
@@ -518,6 +593,191 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
           const alte = await getDocs(query(collection(db, 'spiele'), where('erstellt', '<', grenze), limit(AUFRAEUMEN_MAX)));
           for (const d of alte.docs) { try { await spielLoeschen(d.id); } catch { /* beim nächsten Mal */ } }
         } catch { /* Aufräumen ist freiwillig */ }
+      },
+    },
+
+    // Whiteboard: Rechte wie in den Firestore- und Storage-Regeln, Fehlerkennungen wie im Demo-Speicher.
+    tafel: {
+      async erstellen(sitzung) {
+        const user = await brauchtKonto();
+        const gruppen = Array.isArray(sitzung.gruppen) ? sitzung.gruppen : [];
+        for (let versuch = 0; versuch < 6; versuch++) {
+          const code = spielCode();
+          if ((await versuche(() => getDoc(spielRef(code)))).exists()) continue;
+          if ((await versuche(() => getDoc(tafelRef(code)))).exists()) continue;
+          const t0 = Date.now();
+          await versuche(() => setDoc(tafelRef(code), {
+            status: 'offen', gesperrt: [], ...sitzung, code, hostUid: user.uid, erstellt: serverTimestamp() }));
+          const t1 = Date.now();
+          tafelHost.set(code, user.uid);
+          // Die Regel für Zähler schaut in die Sitzung, die es dafür schon geben muss: zweiter Stapel.
+          try {
+            const stapel = writeBatch(db);
+            gruppen.forEach((_, i) => stapel.set(zaehlerRef(code, i), { bilder: 0, bytes: 0, letztes: '' }));
+            await stapel.commit();
+          } catch (e) { deleteDoc(tafelRef(code)).catch(() => {}); throw uebersetze(e); }
+          await schaetzeVersatz(t0, t1, tafelRef(code), 'erstellt');
+          return code;
+        }
+        throw fehler('allgemein');
+      },
+      /** Ohne Anmeldung über die Web-Schnittstelle, wie spiel.nachsehen. null = gibt es nicht. */
+      async nachsehen(code) { return merkeTafel(await restHolen('tafeln/' + encodeURIComponent(String(code)))); },
+      beobachten: (code, cb) => lausche(tafelRef(code), snap => (snap.exists() ? tafelAus(snap) : null), cb),
+      async aktualisieren(code, patch) {
+        const daten = {};
+        for (const f of ['status', 'gesperrt', 'gruppen']) if (patch && f in patch) daten[f] = patch[f];
+        if (!Object.keys(daten).length) return;
+        await versuche(() => updateDoc(tafelRef(code), daten));
+      },
+      /** Die eigene Gruppe sperren. Die Regel verlangt genau «bisher gesperrt plus eigene Gruppe». */
+      async abgeben(code) {
+        await auth.authStateReady();
+        const uid = auth.currentUser ? auth.currentUser.uid : null;
+        if (!uid) throw fehler('verboten');
+        await versuche(async () => {
+          const [t, m] = await Promise.all([getDoc(tafelRef(code)), getDoc(mitgliedRef(code, uid))]);
+          if (!t.exists()) throw fehler('nichtGefunden');
+          if (!m.exists()) throw fehler('verboten');
+          const gruppe = m.data().gruppe;
+          if (t.data().status !== 'offen') throw fehler('abgegeben');
+          const alt = t.data().gesperrt || [];
+          if (alt.includes(gruppe)) return;
+          await tafelSchreiben(code, gruppe, () => updateDoc(tafelRef(code), { gesperrt: [...new Set([...alt, gruppe])] }));
+        });
+      },
+      async meine(vorlageId) {
+        const user = await brauchtKonto();
+        const snap = await versuche(() => getDocs(query(collection(db, 'tafeln'), where('hostUid', '==', user.uid))));
+        return snap.docs.map(tafelAus)
+          .filter(t => vorlageId == null || t.vorlageId === vorlageId)
+          .sort((a, b) => (b.erstellt || 0) - (a.erstellt || 0));
+      },
+      /**
+       * Alles der Sitzung: zuerst die Bilddateien, dann die Elemente (Bilder einzeln samt Zähler, so verlangen es
+       * die Regeln), Mitglieder, Zähler und zuletzt die Sitzung selbst.
+       */
+      async loeschen(code) {
+        const user = await brauchtKonto();
+        await versuche(async () => {
+          const t = await getDoc(tafelRef(code));
+          if (!t.exists()) throw fehler('nichtGefunden');
+          if (t.data().hostUid !== user.uid) throw fehler('verboten');
+          const [elemente, mitglieder, zaehler] = await Promise.all([
+            getDocs(elementeListe(code)), getDocs(mitgliederListe(code)), getDocs(zaehlerListe(code))]);
+          const alle = elemente.docs.map(d => d.data());
+          const bilder = alle.filter(e => e.art === 'bild');
+          for (const e of bilder) if (e.bildPfad) { await dateiLoeschen(e.bildPfad); tafelBilder.delete(e.bildPfad); }
+          const stand = Object.fromEntries(zaehler.docs.map(d => [d.id, zaehlerAus(d.data())]));
+          for (const e of bilder) {
+            stand[e.gruppe] = await bildElementLoeschen(code, e, stand[e.gruppe] || zaehlerAus());
+          }
+          await loescheAlle([
+            ...elemente.docs.filter(d => d.data().art !== 'bild').map(d => d.ref),
+            ...mitglieder.docs.map(d => d.ref), ...zaehler.docs.map(d => d.ref), tafelRef(code)]);
+        });
+        tafelHost.delete(String(code));
+      },
+      /** Meldet an (oder gibt das bestehende Konto zurück) und liefert die Kennung. */
+      async gast() {
+        await auth.authStateReady();
+        if (auth.currentUser) return auth.currentUser.uid;
+        try { return (await authSdk.signInAnonymously(auth)).user.uid; }
+        catch (e) {
+          const roh = e && e.code;
+          if (roh === 'auth/admin-restricted-operation' || roh === 'auth/operation-not-allowed') throw fehler('gastAus', e);
+          throw uebersetze(e);
+        }
+      },
+      async beitreten(code, { gruppe, name }) {
+        const uid = await store.tafel.gast();
+        const t = await versuche(() => getDoc(tafelRef(code)));
+        if (!t.exists()) throw fehler('nichtGefunden');
+        if (t.data().status !== 'offen') throw fehler('abgegeben');
+        const n = String(name ?? '').trim().slice(0, NAME_MAX);
+        if (!n || !Number.isInteger(gruppe) || gruppe < 0 || gruppe >= (t.data().gruppen || []).length) throw fehler('verboten');
+        // Gleiche Kennung = gleicher Eintrag: Wiederkommen ändert nur Name und Lebenszeichen.
+        await tafelSchreiben(code, gruppe, () => setDoc(mitgliedRef(code, uid), { uid, gruppe, name: n, zuletzt: serverTimestamp() }));
+      },
+      ichBeobachten: (code, cb) => nachAnmeldung(
+        uid => lausche(mitgliedRef(code, uid), snap => (snap.exists() ? mitZeiten(snap, ['zuletzt']) : null), cb),
+        () => cb(null)),
+      mitgliederBeobachten(code, gruppe, cb) {
+        // Alle Mitglieder darf nur die Leitung lesen; Studierende fragen immer mit ihrer Gruppe (so verlangt es die Regel).
+        if (gruppe === null && (!istKonto() || (tafelHost.has(String(code)) && tafelHost.get(String(code)) !== auth.currentUser.uid))) throw fehler('verboten');
+        const ziel = gruppe === null ? mitgliederListe(code) : query(mitgliederListe(code), where('gruppe', '==', gruppe));
+        return lausche(ziel, snap => snap.docs.map(d => mitZeiten(d, ['zuletzt'])), cb);
+      },
+      async lebenszeichen(code) {
+        await auth.authStateReady();
+        const uid = auth.currentUser ? auth.currentUser.uid : null;
+        if (!uid) return;
+        try { await updateDoc(mitgliedRef(code, uid), { zuletzt: serverTimestamp() }); }
+        catch (e) { if (e && e.code === 'not-found') return; throw uebersetze(e); }
+      },
+      async mitgliedEntfernen(code, uid) { await versuche(() => deleteDoc(mitgliedRef(code, uid))); },
+      elementeBeobachten(code, gruppe, cb) {
+        const ziel = gruppe === null ? elementeListe(code) : query(elementeListe(code), where('gruppe', '==', gruppe));
+        return lausche(ziel, snap => snap.docs.map(d => d.data()), cb);
+      },
+      async elementSpeichern(code, roh) {
+        const e = saeubereElement(roh);
+        if (!e) throw fehler('verboten');
+        if (e.art === 'bild') {
+          // Bilder entstehen nur über bildHochladen; hier nur Lage und Aussehen. Pfad und Grösse bleiben, wie sie sind.
+          const alt = await versuche(() => getDoc(elementRef(code, e.id)));
+          if (!alt.exists() || alt.data().art !== 'bild' || alt.data().gruppe !== e.gruppe) throw fehler('verboten');
+          e.bildPfad = alt.data().bildPfad; e.bildBytes = alt.data().bildBytes;
+        }
+        await tafelSchreiben(code, e.gruppe, () => setDoc(elementRef(code, e.id), e));
+      },
+      async elementLoeschen(code, element) {
+        const snap = await versuche(() => getDoc(elementRef(code, element.id)));
+        if (!snap.exists()) return;
+        const e = snap.data();
+        if (e.art !== 'bild') {
+          await tafelSchreiben(code, e.gruppe, () => deleteDoc(elementRef(code, e.id)));
+          return;
+        }
+        await tafelSchreiben(code, e.gruppe, async () => {
+          const z = zaehlerAus((await getDoc(zaehlerRef(code, e.gruppe))).data());
+          await bildElementLoeschen(code, e, z);
+        });
+        if (e.bildPfad) { tafelBilder.delete(e.bildPfad); await dateiLoeschen(e.bildPfad); }
+      },
+      zaehlerBeobachten: (code, gruppe, cb) => lausche(zaehlerRef(code, gruppe), snap => zaehlerAus(snap.exists() ? snap.data() : null), cb),
+      async bildHochladen(code, roh, blob) {
+        const e = saeubereElement({ ...roh, art: 'bild' });
+        if (!e) throw fehler('verboten');
+        const { sdk, speicher } = await storageSdk();
+        const [alt, zSnap] = await versuche(() => Promise.all([getDoc(elementRef(code, e.id)), getDoc(zaehlerRef(code, e.gruppe))]));
+        if (alt.exists()) throw fehler('verboten');   // ein Bild entsteht einmal; ersetzen = löschen und neu
+        if (bildErlaubt(zaehlerAus(zSnap.data()), blob.size)) throw fehler('grenze');
+        const pfad = 'tafeln/' + code + '/' + e.gruppe + '/' + e.id;
+        const z = zaehlerAus(zSnap.data());
+        e.bildPfad = pfad; e.bildBytes = blob.size;
+        await tafelSchreiben(code, e.gruppe, () => sdk.uploadBytes(sdk.ref(speicher, pfad), blob, { contentType: blob.type }));
+        try {
+          await tafelSchreiben(code, e.gruppe, async () => {
+            const stapel = writeBatch(db);
+            stapel.set(elementRef(code, e.id), e);
+            stapel.update(zaehlerRef(code, e.gruppe), { bilder: z.bilder + 1, bytes: z.bytes + blob.size, letztes: e.id });
+            await stapel.commit();
+          });
+        } catch (err) { dateiLoeschen(pfad); throw err; }
+        merkeTafelBild(pfad, blob);
+        return e;
+      },
+      /** Die Datei über einen geprüften Zugriff holen (nie über einen öffentlichen Link). null = gibt es nicht / nicht erlaubt. */
+      async bildLaden(pfad) {
+        if (!pfad) return null;
+        if (tafelBilder.has(pfad)) { const b = tafelBilder.get(pfad); merkeTafelBild(pfad, b); return b; }
+        const { sdk, speicher } = await storageSdk();
+        try {
+          const blob = await sdk.getBlob(sdk.ref(speicher, pfad));
+          merkeTafelBild(pfad, blob);
+          return blob;
+        } catch { return null; }
       },
     },
   };

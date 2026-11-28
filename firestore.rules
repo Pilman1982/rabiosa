@@ -151,6 +151,87 @@ service cloud.firestore {
         && freigeschaltet();
     }
 
+    // ----- Whiteboard: nur im Projekt der Dozierenden (einstellungen/whiteboard). -----
+    function whiteboardAn() { return exists(/databases/$(database)/documents/einstellungen/whiteboard); }
+    match /tafeln/{code} {
+      function t() { return get(/databases/$(database)/documents/tafeln/$(code)).data; }
+      function ich() { return get(/databases/$(database)/documents/tafeln/$(code)/mitglieder/$(request.auth.uid)).data; }
+      function leitung() { return t().hostUid == request.auth.uid; }
+      function offen() { return t().status == 'offen'; }
+      function schreibbar(g) { return leitung() || (offen() && ich().gruppe == g && !(g in t().gesperrt)); }
+      function lesbar(g) { return leitung() || (offen() && ich().gruppe == g); }
+
+      allow get: if true;
+      allow list: if angemeldet() && resource.data.hostUid == request.auth.uid;
+      allow create: if angemeldet() && code.matches('[0-9]{6}') && request.resource.data.code == code
+        && request.resource.data.hostUid == request.auth.uid && request.resource.data.erstellt == request.time
+        && request.resource.data.status == 'offen' && request.resource.data.gesperrt is list
+        && request.resource.data.gruppen is list && request.resource.data.gruppen.size() >= 2 && request.resource.data.gruppen.size() <= 8
+        && whiteboardAn() && freigeschaltet();
+      allow update: if angemeldet() && (
+        (resource.data.hostUid == request.auth.uid
+          && request.resource.data.hostUid == resource.data.hostUid && request.resource.data.erstellt == resource.data.erstellt)
+        // Abgeben: ein Mitglied fügt nur die eigene Gruppe zu «gesperrt» hinzu.
+        || (resource.data.status == 'offen'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gesperrt'])
+          && request.resource.data.gesperrt.toSet() == resource.data.gesperrt.toSet().union([ich().gruppe].toSet())));
+      allow delete: if angemeldet() && resource.data.hostUid == request.auth.uid;
+
+      match /mitglieder/{uid} {
+        allow get: if angemeldet() && (request.auth.uid == uid || leitung());
+        allow list: if angemeldet() && (leitung() || lesbar(resource.data.gruppe));
+        allow create, update: if angemeldet() && request.auth.uid == uid && offen()
+          && request.resource.data.keys().hasOnly(['uid', 'gruppe', 'name', 'zuletzt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.gruppe is int && request.resource.data.gruppe >= 0 && request.resource.data.gruppe < t().gruppen.size()
+          && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 16
+          && request.resource.data.zuletzt == request.time;
+        allow delete: if angemeldet() && (request.auth.uid == uid || leitung());
+      }
+
+      match /zaehler/{g} {
+        allow read: if angemeldet() && lesbar(int(g));
+        allow create: if angemeldet() && leitung();
+        allow update: if angemeldet() && schreibbar(int(g))
+          && request.resource.data.keys().hasOnly(['bilder', 'bytes', 'letztes'])
+          && request.resource.data.bilder is int && request.resource.data.bilder >= 0 && request.resource.data.bilder <= 40
+          && request.resource.data.bytes is int && request.resource.data.bytes >= 0 && request.resource.data.bytes <= 104857600
+          && existsAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes))
+            != exists(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes));
+        allow delete: if angemeldet() && leitung();
+      }
+
+      match /elemente/{id} {
+        function z(g) { return get(/databases/$(database)/documents/tafeln/$(code)/zaehler/$(string(g))).data; }
+        function zDanach(g) { return getAfter(/databases/$(database)/documents/tafeln/$(code)/zaehler/$(string(g))).data; }
+        function gueltig() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['id', 'gruppe', 'art', 'x', 'y', 'b', 'h', 'z', 'farbe', 'text', 'groesse', 'punkte', 'dicke', 'form', 'zeichen', 'bildPfad', 'bildBytes', 'von', 'vonName', 'bearbeitet'])
+            && d.id == id && d.gruppe is int
+            && d.art in ['zettel', 'text', 'strich', 'pfeil', 'form', 'bild', 'sticker']
+            && (!('text' in d) || (d.text is string && d.text.size() <= 2000))
+            && (!('punkte' in d) || (d.punkte is list && d.punkte.size() <= 2000))
+            && (!('vonName' in d) || (d.vonName is string && d.vonName.size() <= 16));
+        }
+        allow read: if angemeldet() && lesbar(resource.data.gruppe);
+        allow create: if angemeldet() && gueltig() && schreibbar(request.resource.data.gruppe)
+          && (request.resource.data.art != 'bild'
+            || (zDanach(request.resource.data.gruppe).bilder == z(request.resource.data.gruppe).bilder + 1
+              && zDanach(request.resource.data.gruppe).bytes == z(request.resource.data.gruppe).bytes + request.resource.data.bildBytes
+              && zDanach(request.resource.data.gruppe).letztes == id
+              && request.resource.data.bildPfad == 'tafeln/' + code + '/' + string(request.resource.data.gruppe) + '/' + id));
+        allow update: if angemeldet() && gueltig() && schreibbar(resource.data.gruppe)
+          && request.resource.data.gruppe == resource.data.gruppe && request.resource.data.art == resource.data.art
+          && request.resource.data.get('bildPfad', '') == resource.data.get('bildPfad', '')
+          && request.resource.data.get('bildBytes', 0) == resource.data.get('bildBytes', 0);
+        allow delete: if angemeldet() && schreibbar(resource.data.gruppe)
+          && (resource.data.art != 'bild'
+            || (zDanach(resource.data.gruppe).bilder == z(resource.data.gruppe).bilder - 1
+              && zDanach(resource.data.gruppe).bytes == z(resource.data.gruppe).bytes - resource.data.bildBytes
+              && zDanach(resource.data.gruppe).letztes == id));
+      }
+    }
+
     // ----- Spiel: der öffentliche Stand. Die Kennung ist der sechsstellige Code. -----
     match /spiele/{code} {
       // Wer den Code kennt, darf den Stand lesen – auch ohne Anmeldung (Handys der Studierenden).
