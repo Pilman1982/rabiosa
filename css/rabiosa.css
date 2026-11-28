@@ -892,3 +892,25 @@ body[data-ansicht="tafeluebersicht"] { background: var(--papier); }
 .tu-bildtext span { color: var(--text-leise); }
 .tu-leer { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; text-align: center; }
 @media (max-width: 767px) { .tu-kopf { padding: 10px 14px; } .tu-inhalt { padding: 16px 14px 60px; } }
+
+/* ---------- Whiteboard: Präsentieren ---------- */
+body[data-ansicht="tafelzeigen"] { background: #0b1220; }
+.tz { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0b1220; color: #fff; }
+.tz-kopf { background: var(--navy); border-bottom: 3px solid var(--kupfer); padding: 10px 24px 8px; flex: none; }
+.tz-zeile { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+.tz-marke { font-family: var(--serif); letter-spacing: .14em; font-size: 15px; font-weight: 600; }
+.tz-titel { font-family: var(--serif); font-size: 24px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.tz-gruppe { font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: #d8a889; overflow-wrap: anywhere; }
+.tz-namen { font-size: 16px; color: #c9d1e2; margin-top: 3px; overflow-wrap: anywhere; }
+.tz-buehne { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #0b1220; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tz-buehne.schwenkt { cursor: grabbing; }
+.tz-buehne .tb-welt { box-shadow: none; will-change: transform; }
+.tz-leiste { display: flex; align-items: center; gap: 12px; background: var(--navy); border-top: 1px solid #ffffff22; padding: 8px 16px; flex: none; }
+.tz-schritte { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; justify-content: center; }
+.tz-schritt { border: 1px solid #ffffff44; background: transparent; color: #c9d1e2; border-radius: 99px; padding: 6px 16px; font-size: 14.5px; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tz-schritt:hover { border-color: #fff; color: #fff; }
+.tz-schritt.an { background: var(--kupfer); border-color: var(--kupfer); color: #fff; font-weight: 700; }
+.tz-vollbild { border: 1px solid #ffffff44; background: transparent; color: #fff; width: 36px; height: 36px; border-radius: 99px; font-size: 18px; flex: none; }
+.tz-vollbild:hover { border-color: #fff; }
+.tz-leer { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: var(--papier); color: var(--navy); padding: 20px; text-align: center; }
+@media (max-width: 767px) { .tz-kopf { padding: 8px 12px; } .tz-titel { font-size: 18px; } .tz-schritt { padding: 5px 11px; font-size: 13px; } }
