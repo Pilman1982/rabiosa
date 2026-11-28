@@ -346,18 +346,27 @@ export function erstelleDemoStore({ speicher = globalThis.localStorage, kanal, j
         if (!leseRecht(code, gruppe)) return [];
         return Object.values(lies(`tafel:${code}:elemente`, {})).filter(e => gruppe === null || e.gruppe === gruppe);
       }, cb),
-      async elementSpeichern(code, roh) {
+      /**
+       * Anlegen nur mit { neu: true }, sonst ändern. Ändern eines Elements, das es nicht (mehr) gibt (jemand hat es
+       * gelöscht), tut still nichts: Ergebnis false, sonst true. So legt ein später Autosave nichts wieder an.
+       */
+      async elementSpeichern(code, roh, { neu = false } = {}) {
         const e = saeubereElement(roh);
         if (!e) throw fehler('verboten');
         schreibRecht(code, e.gruppe);
         const alt = lies(`tafel:${code}:elemente`, {})[e.id];
         if (alt && alt.gruppe !== e.gruppe) throw fehler('verboten');
+        if (!alt) {
+          if (!neu) return false;
+          if (e.art === 'bild') throw fehler('verboten');   // Bilder entstehen nur über bildHochladen
+        }
         if (e.art === 'bild') {
-          if (!alt || alt.art !== 'bild') throw fehler('verboten');   // Bilder entstehen nur über bildHochladen
+          if (alt.art !== 'bild') throw fehler('verboten');
           e.bildPfad = alt.bildPfad; e.bildBytes = alt.bildBytes;
         } else if (alt && alt.art === 'bild') throw fehler('verboten');
         elementSchreiben(code, e);
         meldeTafel(code, ':elemente');
+        return true;
       },
       async elementLoeschen(code, element) {
         const alle = lies(`tafel:${code}:elemente`, {});

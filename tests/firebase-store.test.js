@@ -47,7 +47,7 @@ test('Gast: anonyme Anmeldung aus -> gastAus; Storage wird nicht vorab geladen',
 
 // ----- Whiteboard: Aufrufe an Firestore und Storage aufzeichnen -----
 function aufzeichnendesSdk({ nutzer, daten = {}, updateFehler = null }) {
-  const log = { gelesen: [], stapel: [], updates: [], uploads: [], geloescht: [] };
+  const log = { gelesen: [], stapel: [], updates: [], sets: [], uploads: [], geloescht: [] };
   const pfad = (...t) => t.slice(1).join('/');
   const snap = p => ({ exists: () => p in daten, data: () => daten[p], id: p.split('/').pop(), metadata: {} });
   const firestore = {
@@ -57,7 +57,7 @@ function aufzeichnendesSdk({ nutzer, daten = {}, updateFehler = null }) {
     query: c => c, where: () => ({}),
     getDoc: async ref => { log.gelesen.push(ref.path); return snap(ref.path); },
     getDocs: async () => ({ docs: [] }),
-    setDoc: async () => {}, deleteDoc: async () => {},
+    setDoc: async (ref, d) => { log.sets.push({ pfad: ref.path, daten: d }); }, deleteDoc: async () => {},
     updateDoc: async (ref, d) => { log.updates.push({ pfad: ref.path, daten: d }); if (updateFehler) throw updateFehler; },
     onSnapshot: () => () => {},
     writeBatch: () => {
@@ -71,6 +71,7 @@ function aufzeichnendesSdk({ nutzer, daten = {}, updateFehler = null }) {
     },
     serverTimestamp: () => 'ZEIT',
     arrayUnion: (...w) => ({ arrayUnion: w }),
+    deleteField: () => 'FELD-WEG',
     Timestamp: {},
   };
   const modul = {
@@ -185,4 +186,56 @@ test('Gelöschtes Element, das ein Mitglied einer offenen Sitzung löschen will:
   };
   const store = await erstelleFirebaseStore(KONFIG, { lade });
   await store.tafel.elementLoeschen('123', { id: 'e9', gruppe: 0 });
+});
+
+// ----- Schlussprüfung 1: Gelöschte Elemente kommen nicht zurück -----
+const offeneSitzung = ref => ({ exists: () => true, data: () => (ref.path.endsWith('mitglieder/g') ? { gruppe: 0 } : { status: 'offen', gesperrt: [], hostUid: 'h' }) });
+
+test('elementSpeichern: Anlegen nur mit neu (setDoc), Ändern mit updateDoc; fehlende Felder werden gelöscht', async () => {
+  const { log, lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  const el = { id: 'e1', gruppe: 0, art: 'zettel', x: 1, y: 2, b: 3, h: 4, text: 'a', bearbeitet: null };
+  assert.equal(await store.tafel.elementSpeichern('123', el, { neu: true }), true);
+  assert.deepEqual(log.sets, [{ pfad: 'tafeln/123/elemente/e1', daten: el }]);
+  assert.equal(log.updates.length, 0);
+  assert.equal(await store.tafel.elementSpeichern('123', { ...el, text: undefined, x: 9 }), true);
+  assert.equal(log.sets.length, 1, 'kein zweites setDoc');
+  const [u] = log.updates;
+  assert.equal(u.pfad, 'tafeln/123/elemente/e1');
+  assert.equal(u.daten.x, 9);
+  assert.equal(u.daten.text, 'FELD-WEG', 'geleerter Text bleibt nicht stehen (wie beim Ersetzen)');
+  assert.equal(u.daten.punkte, 'FELD-WEG');
+});
+
+test('elementSpeichern ohne neu auf ein gelöschtes Element: not-found still, false', async () => {
+  const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true }, updateFehler: Object.assign(new Error('x'), { code: 'not-found' }) });
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  assert.equal(await store.tafel.elementSpeichern('123', { id: 'e1', gruppe: 0, art: 'zettel', x: 1 }), false);
+});
+
+test('elementSpeichern ohne neu: verweigert, weil das Element fehlt (Leseregel auch) -> still, false', async () => {
+  const { log, lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true }, updateFehler: verweigert() });
+  const sdk = await lade('firestore');
+  sdk.getDoc = async ref => { if (ref.path.includes('elemente/')) throw verweigert(); return offeneSitzung(ref); };
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  assert.equal(await store.tafel.elementSpeichern('123', { id: 'e1', gruppe: 0, art: 'zettel', x: 1 }), false);
+  assert.equal(log.sets.length, 0);
+});
+
+test('elementSpeichern ohne neu: verweigert, Element da -> verboten bleibt', async () => {
+  const { lade } = aufzeichnendesSdk({
+    nutzer: { uid: 'g', isAnonymous: true }, updateFehler: verweigert(),
+    daten: { 'tafeln/123/elemente/e1': { id: 'e1', gruppe: 1, art: 'zettel' }, 'tafeln/123': { status: 'offen', gesperrt: [], hostUid: 'h' } },
+  });
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  await assert.rejects(() => store.tafel.elementSpeichern('123', { id: 'e1', gruppe: 0, art: 'zettel', x: 1 }), e => e.code === 'verboten');
+});
+
+test('elementSpeichern eines gelöschten Bildes: kein «verboten», false', async () => {
+  const { log, lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  const sdk = await lade('firestore');
+  sdk.getDoc = async ref => { if (ref.path.includes('elemente/')) throw verweigert(); return offeneSitzung(ref); };
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  assert.equal(await store.tafel.elementSpeichern('123', { id: 'b1', gruppe: 0, art: 'bild', x: 1 }), false);
+  assert.equal(log.sets.length + log.updates.length, 0);
 });

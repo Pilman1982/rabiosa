@@ -19,6 +19,9 @@ const STAPEL_GROSS = 200;           // Löschungen pro Stapel, wenn der Server g
 const STAPEL_KLEIN = 10;            // sonst: höchstens 20 Regel-Zugriffe pro Stapel, bis zu 2 pro Löschung
 const AUFRAEUMEN_MAX = 3;           // alte Spiele pro Aufruf von aufraeumen()
 const TAFELBILDER_IM_KOPF = 60;     // so viele geladene Whiteboard-Bilder (Blob) merkt sich der Speicher
+// Felder eines Elements ausser id, gruppe, art (wie hasOnly in firestore.rules): Fehlt eines beim Ändern, wird es gelöscht.
+const ELEMENT_FELDER = ['x', 'y', 'b', 'h', 'z', 'farbe', 'text', 'groesse', 'punkte', 'dicke', 'form', 'zeichen',
+  'bildPfad', 'bildBytes', 'von', 'vonName', 'bearbeitet'];
 
 const AUTH_FEHLER = {
   'auth/invalid-email': 'email',
@@ -87,7 +90,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   catch { db = fs.getFirestore(app); }   // war schon eingerichtet
 
   const { doc, collection, query, where, limit, getDoc, getDocFromServer, getDocs, setDoc, updateDoc, deleteDoc,
-    onSnapshot, writeBatch, serverTimestamp, arrayUnion, Timestamp } = fs;
+    onSnapshot, writeBatch, serverTimestamp, arrayUnion, deleteField, Timestamp } = fs;
 
   // Storage (Bilder des Whiteboards) wird erst gebraucht, wenn ein Bild kommt: kein Vorladen in index.html.
   let storageLaden;
@@ -759,16 +762,34 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         const ziel = gruppe === null ? elementeListe(code) : query(elementeListe(code), where('gruppe', '==', gruppe));
         return lausche(ziel, snap => snap.docs.map(d => d.data()), cb);
       },
-      async elementSpeichern(code, roh) {
+      /**
+       * Anlegen nur mit { neu: true } (setDoc), sonst ändern (updateDoc, das nie anlegt). Gibt es das Element nicht
+       * (mehr), weil jemand es gelöscht hat, tut Ändern still nichts: Ergebnis false, sonst true (wie im Demo-Speicher).
+       */
+      async elementSpeichern(code, roh, { neu = false } = {}) {
         const e = saeubereElement(roh);
         if (!e) throw fehler('verboten');
         if (e.art === 'bild') {
           // Bilder entstehen nur über bildHochladen; hier nur Lage und Aussehen. Pfad und Grösse bleiben, wie sie sind.
           const alt = await elementLesen(code, e.gruppe, e.id);
-          if (!alt || !alt.exists() || alt.data().art !== 'bild' || alt.data().gruppe !== e.gruppe) throw fehler('verboten');
+          if (!alt || !alt.exists()) { if (neu) throw fehler('verboten'); return false; }
+          if (alt.data().art !== 'bild' || alt.data().gruppe !== e.gruppe) throw fehler('verboten');
           e.bildPfad = alt.data().bildPfad; e.bildBytes = alt.data().bildBytes;
         }
-        await tafelSchreiben(code, e.gruppe, () => setDoc(elementRef(code, e.id), e));
+        if (neu) { await tafelSchreiben(code, e.gruppe, () => setDoc(elementRef(code, e.id), e)); return true; }
+        // Ändern ersetzt das ganze Element wie setDoc: Felder, die fehlen (z. B. geleerter Text), werden gelöscht.
+        const daten = { ...e };
+        for (const f of ELEMENT_FELDER) if (!(f in daten)) daten[f] = deleteField();
+        try { await updateDoc(elementRef(code, e.id), daten); return true; }
+        catch (err) {
+          if (err && err.code === 'not-found') return false;
+          if (!istVerweigert(err)) throw uebersetze(err);
+          // Die Regel verweigert auch, wenn es das Element nicht mehr gibt (resource ist leer): nachsehen.
+          const snap = await elementLesen(code, e.gruppe, e.id);
+          if (!snap || !snap.exists()) return false;
+          const lage = await verweigerungsLage(code, e.gruppe);
+          throw fehler(lage.eigene && lage.zu ? 'abgegeben' : 'verboten', err);
+        }
       },
       async elementLoeschen(code, element) {
         const snap = await elementLesen(code, element.gruppe, element.id);

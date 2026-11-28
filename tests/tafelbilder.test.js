@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import {
-  EHL_STICKER, EMOJIS, STICKER_GROESSE, BILD_START, einpassGroesse, hatTransparenz, stickerQuelle, bildFehlerSchluessel, plusUnterwegs,
+  EHL_STICKER, EMOJIS, STICKER_GROESSE, BILD_START, einpassGroesse, hatTransparenz, stickerQuelle, bildFehlerSchluessel, plusUnterwegs, textVorBild,
 } from '../js/logik/tafelbilder.js';
 import { saeubereElement } from '../js/logik/tafel.js';
 import { TEXTE } from '../js/i18n.js';
@@ -75,4 +75,16 @@ test('bildFehlerSchluessel: jeder Fehler der Logik hat einen Text in Deutsch und
 test('plusUnterwegs: laufende Hochladen zählen schon mit', () => {
   assert.deepEqual(plusUnterwegs({ bilder: 3, bytes: 100 }, { n: 2, bytes: 50 }), { bilder: 5, bytes: 150 });
   assert.deepEqual(plusUnterwegs(null, { n: 1, bytes: 5 }), { bilder: 1, bytes: 5 });
+});
+
+test('textVorBild: aus Excel, Word, PowerPoint kommt Text, auch wenn ein Bild mitkommt (Schlussprüfung 3)', () => {
+  const excel = '<html><head><style>td { mso-number-format: General; }</style></head><body><!--StartFragment--><table><tr><td>Mise en place</td><td>12</td></tr></table><!--EndFragment--></body></html>';
+  assert.equal(textVorBild({ text: 'Mise en place	12', html: excel }), true, 'Excel: Tabelle als Text');
+  assert.equal(textVorBild({ text: 'Rösti', html: '', rtf: '{\rtf1 Rösti}' }), true, 'nur RTF');
+  assert.equal(textVorBild({ text: 'Folie 1', html: '<p>Folie 1</p><img src="x.png">' }), true, 'Text mit Bild: Text');
+  assert.equal(textVorBild({ text: 'Bild', html: '<html><body><!--StartFragment--><img src="https://x/y.png" alt="Bild"><!--EndFragment--></body></html>' }), false, 'nur ein Bild aus dem Browser');
+  assert.equal(textVorBild({ text: 'Bild', html: '<meta charset="utf-8"><a href="/z"><img src="y.png"></a>' }), false, 'ein verlinktes Bild');
+  assert.equal(textVorBild({ text: '   ', html: '<p> </p>' }), false, 'kein Text');
+  assert.equal(textVorBild({ text: 'Hallo' }), false, 'ohne HTML und RTF: wie bisher (Bild zuerst)');
+  assert.equal(textVorBild({}), false);
 });

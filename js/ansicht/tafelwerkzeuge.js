@@ -315,21 +315,31 @@ export function erstelleWerkzeuge(b) {
     return e.id;
   }
 
-  /** Alles Laufende beenden (Sperre, Rückgängig, Abbau). Bewegtes wird still festgehalten, Neues verworfen. */
-  function abbrechen() {
+  /**
+   * Alles Laufende beenden (Sperre, Rückgängig, Abbau). Bewegtes wird still festgehalten, Neues verworfen.
+   * weg: Das Element in Arbeit ist inzwischen gelöscht; dann wird nichts festgehalten.
+   */
+  function abbrechen(weg = false) {
     if (bearbeitung) {
       const { e, vorher, feld, geschrieben } = bearbeitung;
       bearbeitung = null;
       feld.remove();
       b.verwerfen(e.id);
-      if (vorher && geschrieben) b.stillSpeichern(vorher);
+      if (vorher && geschrieben && !weg) b.stillSpeichern(vorher);
     }
     const g = geste;
     geste = null;
     if (!g) return;
     if (g.id) b.verwerfen(g.id);
-    if ((g.art === 'bewegen' || g.art === 'groesse') && g.aktuell) { b.verwerfen(g.aktuell.id); b.stillSpeichern(g.aktuell); }
+    if ((g.art === 'bewegen' || g.art === 'groesse') && g.aktuell) { b.verwerfen(g.aktuell.id); if (!weg) b.stillSpeichern(g.aktuell); }
   }
 
-  return { leiste, aktualisiere, abbrechen, beendeBearbeitung, unten, ziehen, los, doppel, taste, textEinfuegen, waehle: waehleWerkzeug };
+  /** Kennung des vorhandenen Elements, das gerade beschrieben, verschoben oder in der Grösse geändert wird, sonst null. */
+  function inArbeit() {
+    if (bearbeitung && bearbeitung.vorher) return bearbeitung.e.id;
+    if (geste && (geste.art === 'bewegen' || geste.art === 'groesse')) return geste.vorher.id;
+    return null;
+  }
+
+  return { leiste, aktualisiere, abbrechen, inArbeit, beendeBearbeitung, unten, ziehen, los, doppel, taste, textEinfuegen, waehle: waehleWerkzeug };
 }

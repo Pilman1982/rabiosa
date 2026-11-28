@@ -222,7 +222,7 @@ test('Tafel: erstellen, beitreten, Element live, gleiche Kennung = ein Element (
   await store.tafel.beitreten(code, { gruppe: 1, name: 'Lena' });
   const mitglieder = []; store.tafel.mitgliederBeobachten(code, null, l => mitglieder.push(l)); await tick();
   assert.equal(mitglieder.at(-1).length, 1, 'wieder beitreten legt keinen zweiten Eintrag an');
-  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 1, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' });
+  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 1, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' }, { neu: true });
   await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 1, art: 'zettel', x: 50, y: 0, b: 200, h: 120, text: 'b' });
   const el = []; store.tafel.elementeBeobachten(code, 1, l => el.push(l)); await tick();
   assert.equal(el.at(-1).length, 1); assert.equal(el.at(-1)[0].text, 'b');
@@ -234,7 +234,7 @@ test('Tafel: gesperrte Gruppe und beendete Sitzung verweigern mit «abgegeben» 
   await g0.tafel.beitreten(code, { gruppe: 0, name: 'Lena' });
   await g1.tafel.beitreten(code, { gruppe: 1, name: 'Ben' });
   const el = { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' };
-  await g0.tafel.elementSpeichern(code, el);
+  await g0.tafel.elementSpeichern(code, el, { neu: true });
   await g0.tafel.abgeben(code);
   assert.deepEqual((await store.tafel.nachsehen(code)).gesperrt, [0]);
   await g1.tafel.abgeben(code);
@@ -246,7 +246,7 @@ test('Tafel: gesperrte Gruppe und beendete Sitzung verweigern mit «abgegeben» 
   await store.tafel.aktualisieren(code, { status: 'beendet' });
   const gesehen = []; g1.tafel.elementeBeobachten(code, 1, l => gesehen.push(l)); await tick();
   assert.deepEqual(gesehen.at(-1), []);
-  assert.equal(await fehlerCode(g1.tafel.elementSpeichern(code, { ...el, id: 'e2', gruppe: 1 })), 'abgegeben');
+  assert.equal(await fehlerCode(g1.tafel.elementSpeichern(code, { ...el, id: 'e2', gruppe: 1 }, { neu: true })), 'abgegeben');
   assert.equal(await fehlerCode(g1.tafel.abgeben(code)), 'abgegeben');
 });
 
@@ -269,7 +269,7 @@ test('Tafel: Bilder zählen, Grenze 40, Löschen gibt Platz frei, Datei weg', as
   await tick();
   assert.equal(zaehler.at(-1).bilder, 39);
   assert.equal(await store.tafel.bildLaden(letztes.bildPfad), null);
-  assert.equal(await fehlerCode(store.tafel.elementSpeichern(code, { id: 'neu', gruppe: 0, art: 'bild' })), 'verboten', 'Bilder nur über bildHochladen');
+  assert.equal(await fehlerCode(store.tafel.elementSpeichern(code, { id: 'neu', gruppe: 0, art: 'bild' }, { neu: true })), 'verboten', 'Bilder nur über bildHochladen');
   await store.tafel.bildHochladen(code, { id: 'b40', gruppe: 0, art: 'bild' }, klein());
 });
 
@@ -277,8 +277,8 @@ test('Tafel: fremde Gruppe sieht und ändert nichts, Leitung sieht alles', async
   const { store, code, gast } = await tafelMitLeitung();
   const g0 = gast('g-null');
   await g0.tafel.beitreten(code, { gruppe: 0, name: 'Lena' });
-  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, text: 'a' });
-  await store.tafel.elementSpeichern(code, { id: 'e2', gruppe: 1, art: 'zettel', x: 0, y: 0, text: 'b' });
+  await store.tafel.elementSpeichern(code, { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, text: 'a' }, { neu: true });
+  await store.tafel.elementSpeichern(code, { id: 'e2', gruppe: 1, art: 'zettel', x: 0, y: 0, text: 'b' }, { neu: true });
   const fremd = []; g0.tafel.elementeBeobachten(code, 1, l => fremd.push(l));
   const eigen = []; g0.tafel.elementeBeobachten(code, 0, l => eigen.push(l));
   const alle = []; store.tafel.elementeBeobachten(code, null, l => alle.push(l));
@@ -286,7 +286,7 @@ test('Tafel: fremde Gruppe sieht und ändert nichts, Leitung sieht alles', async
   assert.deepEqual(fremd.at(-1), []);
   assert.equal(eigen.at(-1).length, 1);
   assert.equal(alle.at(-1).length, 2);
-  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e3', gruppe: 1, art: 'zettel', x: 0, y: 0 })), 'verboten');
+  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e3', gruppe: 1, art: 'zettel', x: 0, y: 0 }, { neu: true })), 'verboten');
   assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'e2', gruppe: 0, art: 'zettel', x: 0, y: 0 })), 'verboten', 'fremdes Element nicht übernehmen');
   assert.throws(() => g0.tafel.mitgliederBeobachten(code, null, () => {}), { code: 'verboten' });
 });
@@ -305,4 +305,23 @@ test('Tafel: zaehlerLesen liefert alle Gruppen einmalig, nur der Leitung; Lösch
   assert.equal(da(b.bildPfad), true, 'Bild der anderen bleibt');
   assert.deepEqual((await store.tafel.meine('q1')).map(s => s.code), [zweite]);
   assert.equal(await store.tafel.nachsehen(code), null);
+});
+
+test('Tafel: Ändern eines fehlenden Elements tut still nichts, Anlegen nur mit neu (Schlussprüfung 1)', async () => {
+  const { store, code, gast } = await tafelMitLeitung();
+  const g0 = gast('g-null');
+  await g0.tafel.beitreten(code, { gruppe: 0, name: 'Lena' });
+  const el = { id: 'e1', gruppe: 0, art: 'zettel', x: 0, y: 0, b: 200, h: 120, text: 'a' };
+  assert.equal(await g0.tafel.elementSpeichern(code, { ...el, x: 5 }), false, 'ohne neu entsteht nichts');
+  assert.equal(await g0.tafel.elementSpeichern(code, el, { neu: true }), true);
+  assert.equal(await g0.tafel.elementSpeichern(code, { ...el, text: 'b' }), true, 'Ändern eines vorhandenen Elements');
+  await store.tafel.elementLoeschen(code, el);   // die Lehrperson löscht, während der Gast noch zieht
+  assert.equal(await g0.tafel.elementSpeichern(code, { ...el, x: 40 }), false, 'Autosave und Loslassen legen es nicht wieder an');
+  const bild = await g0.tafel.bildHochladen(code, { id: 'b1', gruppe: 0, art: 'bild', x: 0, y: 0, b: 10, h: 10 }, klein());
+  await store.tafel.elementLoeschen(code, bild);
+  assert.equal(await g0.tafel.elementSpeichern(code, { ...bild, x: 9 }), false, 'gelöschtes Bild verschieben: kein Fehler');
+  const gesehen = []; store.tafel.elementeBeobachten(code, null, l => gesehen.push(l)); await tick();
+  assert.deepEqual(gesehen.at(-1), []);
+  assert.equal(await g0.tafel.elementSpeichern(code, el, { neu: true }), true, 'bewusst wieder anlegen (Rückgängig)');
+  assert.equal(await fehlerCode(g0.tafel.elementSpeichern(code, { id: 'b2', gruppe: 0, art: 'bild' }, { neu: true })), 'verboten', 'Bilder nur über bildHochladen');
 });

@@ -14,6 +14,7 @@ import {
 } from '../logik/tafelbrett.js';
 import { zufallsKennung } from '../store/gemeinsam.js';
 import { ohneSperre } from '../logik/tafeluebersicht.js';
+import { textVorBild } from '../logik/tafelbilder.js';
 import { zeichneElement, zeichneWelt } from './tafelelemente.js';
 import { erstelleWerkzeuge } from './tafelwerkzeuge.js';
 import { erstelleBilder, erstelleBildUrls } from './tafelbilder.js';
@@ -106,13 +107,20 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     const nr = setTimeout(() => { timer.delete(nr); const o = lokal.get(id); if (o && o.bis <= Date.now()) { lokal.delete(id); zeichne(); } }, ECHO_MS + 50);
     timer.add(nr);
   }
+  /** Der Speicher hat eine Änderung verworfen, weil das Element inzwischen gelöscht ist: lokale Vorschau weg. */
+  function verworfen(id) { if (zu) return; lokal.delete(id); zeichne(); }
   const roh = {
-    speichern: e => store.tafel.elementSpeichern(code, e).catch(err => fehlgeschlagen(err, e.id)),
+    /** neu: anlegen; sonst nur ändern (ein inzwischen gelöschtes Element entsteht so nicht wieder). */
+    speichern: (e, neu = false) => store.tafel.elementSpeichern(code, e, { neu })
+      .then(ok => { if (ok === false) verworfen(e.id); }, err => fehlgeschlagen(err, e.id)),
     loeschen: e => store.tafel.elementLoeschen(code, { id: e.id, gruppe: e.gruppe }).catch(err => fehlgeschlagen(err, e.id)),
   };
   const drossel = erstelleDrossel(e => { if (schreibbar()) roh.speichern({ ...e, bearbeitet: { uid: ich.uid, name: ich.name } }); }, DROSSEL_MS);
 
-  /** Endgültig speichern (bearbeitet: null). vorher !== undefined: als Schritt für Rückgängig merken. */
+  /**
+   * Endgültig speichern (bearbeitet: null). vorher !== undefined: als Schritt für Rückgängig merken.
+   * vorher === null: ein neues Element, das angelegt wird; sonst wird nur geändert.
+   */
   function speichern(e, vorher) {
     drossel.abbrechen();
     if (!schreibbar()) return;
@@ -120,7 +128,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     if (vorher !== undefined) stapel = merke(stapel, { vorher: vorher && ohneBearbeitung(vorher), nachher });
     warteAufEcho(nachher.id, nachher);
     zeichne();
-    roh.speichern(nachher);
+    roh.speichern(nachher, vorher === null);
   }
   /** Ein Bild lässt sich nach dem Löschen nicht zurückholen (die Datei ist weg): Rückfrage, kein Schritt für Rückgängig. */
   async function bildLoeschen(e) {
@@ -140,13 +148,20 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     zeichne();
     roh.loeschen(e);
   }
+  /**
+   * Einen Schritt anwenden. Hat jemand anderes das Element inzwischen gelöscht, wird der Schritt übersprungen.
+   * Nur ein Schritt ohne vorher (ein eigenes gelöschtes Element per Rückgängig zurückholen) legt bewusst neu an;
+   * ein Bild lässt sich so nicht zurückholen (die Datei ist weg).
+   */
   function wende(schritt) {
     if (!schritt) return;
     werkzeuge.abbrechen();
-    if (schritt.nachher && schritt.nachher.art === 'bild' && !element(schritt.nachher.id)) return;   // das Bild ist inzwischen gelöscht
-    if (schritt.nachher) { warteAufEcho(schritt.nachher.id, schritt.nachher); roh.speichern(schritt.nachher); }
-    else if (schritt.vorher) { if (auswahl === schritt.vorher.id) auswahl = null; warteAufEcho(schritt.vorher.id, null); roh.loeschen(schritt.vorher); }
-    zeichne();
+    const { vorher, nachher } = schritt;
+    const id = (nachher || vorher).id;
+    const weg = !element(id) && (vorher || nachher.art === 'bild');   // remote gelöscht, oder ein gelöschtes Bild
+    if (!weg && nachher) { warteAufEcho(id, nachher); roh.speichern(nachher, !vorher); }
+    else if (!weg) { if (auswahl === id) auswahl = null; warteAufEcho(id, null); roh.loeschen(vorher); }
+    zeichne();                                                        // auch beim Überspringen: Knöpfe nachführen
   }
   function zurueck() { if (!schreibbar()) return; const r = rueckgaengig(stapel); if (r) { stapel = r.stapel; wende(r.schritt); } }
   function vor() { if (!schreibbar()) return; const r = wiederholen(stapel); if (r) { stapel = r.stapel; wende(r.schritt); } }
@@ -155,6 +170,13 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     const jetzt = Date.now();
     const neu = new Map(liste.filter(e => e && e.gruppe === gruppe).map(e => [e.id, e]));
     for (const [id, e] of neu) if (!gleicheElemente(remote.get(id), e)) empfangen.set(id, jetzt);
+    // Löscht jemand anderes das Element, das hier gerade gezogen oder beschrieben wird: abbrechen, nichts speichern.
+    const inArbeit = werkzeuge.inArbeit();
+    if (inArbeit && remote.has(inArbeit) && !neu.has(inArbeit)) {
+      werkzeuge.abbrechen(true);
+      drossel.abbrechen();
+      lokal.delete(inArbeit);
+    }
     remote.clear();
     for (const [id, e] of neu) remote.set(id, e);
     for (const [id, o] of lokal) {
@@ -351,17 +373,21 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
   const dateienIn = dt => (dt ? [...(dt.files || [])] : []);
   const hatDateien = dt => !!dt && [...(dt.types || [])].includes('Files');
 
-  /** Strg+V: Bilder (auch mehrere) werden hochgeladen, Text ohne Bild wird ein Textfeld an der Maus. */
+  /**
+   * Strg+V: Bilder (auch mehrere) werden hochgeladen, Text wird ein Textfeld an der Maus. Kommt aus Excel, Word oder
+   * PowerPoint neben dem Text auch ein Bild mit, gilt der Text (textVorBild).
+   */
   function einfuegen(ev) {
     if (zu || !gebaut || !schreibbar()) return;
     if (ev.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
     const cd = ev.clipboardData;
     if (!cd) return;
-    let dateien = dateienIn(cd);
-    if (!dateien.length) dateien = [...(cd.items || [])].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+    const text = cd.getData('text/plain') || '';
+    const alsText = textVorBild({ text, html: cd.getData('text/html') || '', rtf: cd.getData('text/rtf') || '' });
+    let dateien = alsText ? [] : dateienIn(cd);
+    if (!alsText && !dateien.length) dateien = [...(cd.items || [])].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
     const p = zeigerPunkt();
     if (dateien.length) { ev.preventDefault(); bilderMod.einfuegen(dateien, p); return; }
-    const text = cd.getData('text/plain') || '';
     if (!text.trim()) return;
     ev.preventDefault();
     const id = werkzeuge.textEinfuegen(text, p);
@@ -407,7 +433,10 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     verwerfen(id) { if (lokal.get(id)?.bis === Infinity) lokal.delete(id); zeichne(); },
     zwischenspeichern: e => drossel.rufe(e),
     /** Nach Abbruch: den letzten Stand still festhalten, ohne Schritt und ohne Meldung. */
-    stillSpeichern(e) { drossel.abbrechen(); if (schreibbar()) store.tafel.elementSpeichern(code, ohneBearbeitung(e)).catch(() => {}); },
+    stillSpeichern(e) {
+      drossel.abbrechen();
+      if (schreibbar()) store.tafel.elementSpeichern(code, ohneBearbeitung(e)).then(ok => { if (ok === false) verworfen(e.id); }, () => {});
+    },
     neueKennung: () => neueKennung(Date.now(), zufallsKennung),
     code,
     /** Neues Element mit Kennung, Gruppe, Ebene ganz vorn und Urheber. */
@@ -437,7 +466,7 @@ export function zeigeBrett(ziel, ctx, { code, gruppe, rolle }) {
     get editorEbene() { return editorEbene; },
   };
   // Die Leiste entsteht erst mit der Sitzung (in deren Sprache); bis dahin tun die Werkzeuge nichts.
-  const LEER = { leiste: null, aktualisiere() {}, abbrechen() {}, beendeBearbeitung: () => false, unten() {}, ziehen() {}, los() {}, doppel: () => false, taste: () => false };
+  const LEER = { leiste: null, aktualisiere() {}, abbrechen() {}, inArbeit: () => null, beendeBearbeitung: () => false, unten() {}, ziehen() {}, los() {}, doppel: () => false, taste: () => false };
   let werkzeuge = LEER;
 
   function baue() {

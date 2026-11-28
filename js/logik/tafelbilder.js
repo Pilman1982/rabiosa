@@ -46,3 +46,19 @@ export const plusUnterwegs = (zaehler, unterwegs) => ({
   bilder: ((zaehler && zaehler.bilder) || 0) + unterwegs.n,
   bytes: ((zaehler && zaehler.bytes) || 0) + unterwegs.bytes,
 });
+
+/**
+ * Strg+V: Text statt Bild? Excel, Word und PowerPoint legen beim Kopieren oft zusätzlich ein Bild (image/png) in die
+ * Zwischenablage. Gibt es Text und dazu HTML oder RTF, ist der Text gemeint, ausser das HTML ist nur ein einzelnes Bild
+ * (ein Bild aus dem Browser kopiert).
+ */
+export function textVorBild({ text = '', html = '', rtf = '' } = {}) {
+  if (!String(text).trim() || !(html || rtf)) return false;
+  if (!html) return true;
+  const ohne = String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|script|head|title|xml)\b[\s\S]*?<\/\1\s*>/gi, '');
+  const bilder = (ohne.match(/<img\b/gi) || []).length;
+  const sichtbar = ohne.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;/gi, ' ').trim();
+  return !(bilder === 1 && !sichtbar);
+}
