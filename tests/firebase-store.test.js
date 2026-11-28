@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { erstelleFirebaseStore, FIREBASE_VERSION } from '../js/store/firebase.js';
+import { erstelleFirebaseStore, FIREBASE_VERSION, TAFELBILD_WARTEN_MS } from '../js/store/firebase.js';
+import { NEUSTART_WARTEN_MS } from '../js/logik/tafel.js';
 
 function falschesSdk(nutzer = null) {
   const gesehen = { firestore: null };
@@ -238,4 +239,150 @@ test('elementSpeichern eines gelöschten Bildes: kein «verboten», false', asyn
   const store = await erstelleFirebaseStore(KONFIG, { lade });
   assert.equal(await store.tafel.elementSpeichern('123', { id: 'b1', gruppe: 0, art: 'bild', x: 1 }), false);
   assert.equal(log.sets.length + log.updates.length, 0);
+});
+
+// ----- Abnahme: Beitritt (Wettlauf mit dem Server) und Bilder, die nie kommen -----
+const warte = () => new Promise(ok => setImmediate(ok));
+async function leeren(n = 5) { for (let i = 0; i < n; i++) await warte(); }
+/** onSnapshot aufzeichnen: jede Anmeldung mit ihren Rückrufen, zum Auslösen im Test. */
+function zuhoerer(sdk) {
+  const anmeldungen = [];
+  sdk.onSnapshot = (ziel, opt, weiter, fehlerCb) => {
+    const a = { pfad: ziel.path, weiter, fehler: fehlerCb, aktiv: true };
+    anmeldungen.push(a);
+    return () => { a.aktiv = false; };
+  };
+  return anmeldungen;
+}
+const stand = (daten, { cache = false, ausstehend = false } = {}) => ({
+  exists: () => daten != null, data: () => daten, docs: [], id: 'x',
+  metadata: { fromCache: cache, hasPendingWrites: ausstehend },
+});
+const offenMitMitglied = { 'tafeln/123': { status: 'offen', gesperrt: [], hostUid: 'h' }, 'tafeln/123/mitglieder/g': { uid: 'g', gruppe: 0 } };
+
+test('ichBeobachten: ein Stand mit ausstehendem eigenem Schreiben gilt nicht als bestätigter Beitritt', async () => {
+  const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  const anmeldungen = zuhoerer(await lade('firestore'));
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  const gesehen = [];
+  store.tafel.ichBeobachten('123', m => gesehen.push(m));
+  await leeren();
+  const [a] = anmeldungen;
+  assert.equal(a.pfad, 'tafeln/123/mitglieder/g');
+  a.weiter(stand(null));
+  assert.deepEqual(gesehen, [null], 'noch nicht beigetreten');
+  const m = { uid: 'g', gruppe: 0, name: 'Anna', zuletzt: 'ZEIT' };
+  a.weiter(stand(m, { ausstehend: true }));
+  assert.deepEqual(gesehen, [null], 'nur lokal geschrieben: die Regeln kennen das Mitglied noch nicht');
+  a.weiter(stand(m));
+  assert.equal(gesehen.length, 2);
+  assert.equal(gesehen[1].gruppe, 0, 'vom Server bestätigt: jetzt ins Brett');
+});
+
+test('Beobachtung einer Gruppe: verweigert, Sitzung offen und Mitglied da -> nach Wartezeit neu, begrenzt', async t => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { log, lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true }, daten: offenMitMitglied });
+  const anmeldungen = zuhoerer(await lade('firestore'));
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  const gesehen = [];
+  const stopp = store.tafel.elementeBeobachten('123', 0, l => gesehen.push(l));
+  assert.equal(anmeldungen.length, 1);
+  anmeldungen[0].fehler(verweigert());
+  await leeren();
+  assert.equal(anmeldungen.length, 1, 'nicht sofort (keine enge Schleife)');
+  t.mock.timers.tick(NEUSTART_WARTEN_MS[0]);
+  await leeren();
+  assert.equal(anmeldungen.length, 2, 'neu angemeldet');
+  assert.ok(log.gelesen.includes('tafeln/123') && log.gelesen.includes('tafeln/123/mitglieder/g'), 'vorher nachgesehen');
+  anmeldungen[1].weiter({ docs: [{ data: () => ({ id: 'e1', gruppe: 0 }) }], metadata: { fromCache: false, hasPendingWrites: false } });
+  assert.deepEqual(gesehen, [[{ id: 'e1', gruppe: 0 }]]);
+  // Verweigert es immer wieder: nur wenige Versuche.
+  for (let i = 0; i < 10; i++) {
+    anmeldungen.at(-1).fehler(verweigert());
+    await leeren();
+    t.mock.timers.tick(60_000);
+    await leeren();
+  }
+  assert.equal(anmeldungen.length, 1 + NEUSTART_WARTEN_MS.length, 'begrenzt');
+  stopp();
+});
+
+test('Beobachtung einer Gruppe: verweigert nach beendet oder ohne Mitglied -> kein Neuversuch', async t => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const daten of [
+    { ...offenMitMitglied, 'tafeln/123': { status: 'beendet', gesperrt: [], hostUid: 'h' } },
+    { 'tafeln/123': { status: 'offen', gesperrt: [], hostUid: 'h' } },
+  ]) {
+    const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true }, daten });
+    const anmeldungen = zuhoerer(await lade('firestore'));
+    const store = await erstelleFirebaseStore(KONFIG, { lade });
+    store.tafel.mitgliederBeobachten('123', 0, () => {});
+    store.tafel.zaehlerBeobachten('123', 0, () => {});
+    for (const a of anmeldungen.slice()) a.fehler(verweigert());
+    await leeren();
+    t.mock.timers.tick(60_000);
+    await leeren();
+    assert.equal(anmeldungen.length, 2, JSON.stringify(daten));
+  }
+});
+
+test('Beobachtung: abgemeldet während der Wartezeit -> kein Neuversuch', async t => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true }, daten: offenMitMitglied });
+  const anmeldungen = zuhoerer(await lade('firestore'));
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  const stopp = store.tafel.zaehlerBeobachten('123', 0, () => {});
+  anmeldungen[0].fehler(verweigert());
+  stopp();
+  t.mock.timers.tick(60_000);
+  await leeren();
+  assert.equal(anmeldungen.length, 1);
+});
+
+async function speicherMit(lade, getBlob) {
+  const speicher = {};
+  const st = await lade('storage');
+  st.getStorage = () => speicher;
+  st.getBlob = getBlob;
+  return speicher;
+}
+
+test('bildLaden: hängt das Herunterladen (CORS, Netz), kommt nach der Frist null', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  const speicher = await speicherMit(lade, () => new Promise(() => {}));   // das SDK versucht es endlos neu
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  let ergebnis = 'offen';
+  store.tafel.bildLaden('tafeln/123/0/e1').then(b => { ergebnis = b; });
+  await leeren();
+  assert.equal(ergebnis, 'offen');
+  assert.equal(speicher.maxOperationRetryTime, TAFELBILD_WARTEN_MS, 'das SDK gibt auch selbst auf');
+  t.mock.timers.tick(TAFELBILD_WARTEN_MS);
+  await leeren();
+  assert.equal(ergebnis, null);
+  assert.ok(TAFELBILD_WARTEN_MS > 0 && TAFELBILD_WARTEN_MS <= 20_000);
+});
+
+test('bildLaden: Fehler beim Herunterladen oder beim Laden des Storage-SDK -> null, kein Fehler', async () => {
+  const a = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  await speicherMit(a.lade, async () => { throw Object.assign(new Error('cors'), { code: 'storage/unknown' }); });
+  const s1 = await erstelleFirebaseStore(KONFIG, { lade: a.lade });
+  assert.equal(await s1.tafel.bildLaden('tafeln/123/0/e1'), null);
+  const b = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  const s2 = await erstelleFirebaseStore(KONFIG, { lade: async n => { if (n === 'storage') throw new Error('offline'); return b.lade(n); } });
+  assert.equal(await s2.tafel.bildLaden('tafeln/123/0/e1'), null);
+});
+
+test('bildLaden: ein Bild, das ankommt, wird gemerkt', async () => {
+  const { lade } = aufzeichnendesSdk({ nutzer: { uid: 'g', isAnonymous: true } });
+  let n = 0;
+  const blob = { size: 3, type: 'image/png' };
+  await speicherMit(lade, async () => { n++; return blob; });
+  const store = await erstelleFirebaseStore(KONFIG, { lade });
+  assert.equal(await store.tafel.bildLaden('tafeln/123/0/e1'), blob);
+  assert.equal(await store.tafel.bildLaden('tafeln/123/0/e1'), blob);
+  assert.equal(n, 1);
 });

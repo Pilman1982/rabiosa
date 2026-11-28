@@ -926,6 +926,7 @@ body[data-ansicht="tafeldruck"] { background: #e8e5df; }
 .tdr-zurueck:hover { color: #fff; }
 .tdr-zahl { font-size: 14px; color: #c9d2e6; }
 .tdr-hilfe { color: #c9d2e6; margin: 0; flex-basis: 100%; font-size: 13.5px; }
+.tdr-warnung { color: #ffd9c7; margin: 0; flex-basis: 100%; font-size: 14px; font-weight: 600; }
 .tdr-blaetter { display: flex; flex-wrap: wrap; gap: 16px; padding: 20px 24px 40px; }
 .tdr-blatt { width: 277mm; height: 190mm; display: flex; flex-direction: column; gap: 3mm; background: #fff; box-shadow: 0 2px 10px #0002; zoom: .45; flex: none; overflow: hidden;
   -webkit-print-color-adjust: exact; print-color-adjust: exact; }

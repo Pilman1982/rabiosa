@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BYTES_MAX, TEXT_MAX, PUNKTE_MAX, neueTafelVorlage, beispielTafel, tafelFehler, zonenRaster, zoneVon,
   saeubereElement, vereinfache, zielGroesse, bildPruefen, bildErlaubt, istOnline, praesentationsSchritte,
-  neuerStapel, merke, rueckgaengig, wiederholen, sitzungAusVorlage, istWhiteboard,
+  neuerStapel, merke, rueckgaengig, wiederholen, sitzungAusVorlage, istWhiteboard, neustartWarten, NEUSTART_WARTEN_MS,
 } from '../js/logik/tafel.js';
 import { quizFehler } from '../js/logik/quiz.js';
 
@@ -106,4 +106,14 @@ test('sitzungAusVorlage: Zonen, Gruppen, offen, nichts gesperrt', () => {
   const s = sitzungAusVorlage({ ...beispielTafel('de'), id: 'q1' }, ['A', 'B'], 'u1');
   assert.equal(s.vorlageId, 'q1'); assert.equal(s.hostUid, 'u1'); assert.equal(s.status, 'offen');
   assert.deepEqual(s.gruppen, ['A', 'B']); assert.deepEqual(s.gesperrt, []); assert.equal(s.zonen.length, 4);
+});
+
+test('neustartWarten: wenige Versuche mit wachsender Wartezeit, danach keiner mehr', () => {
+  assert.ok(NEUSTART_WARTEN_MS.length >= 2 && NEUSTART_WARTEN_MS.length <= 5, 'nur wenige Versuche');
+  const zeiten = NEUSTART_WARTEN_MS.map((_, i) => neustartWarten(i));
+  assert.ok(zeiten[0] >= 1000, 'nie sofort (keine enge Schleife)');
+  for (let i = 1; i < zeiten.length; i++) assert.ok(zeiten[i] > zeiten[i - 1], 'wachsend');
+  assert.equal(neustartWarten(NEUSTART_WARTEN_MS.length), null);
+  assert.equal(neustartWarten(-1), null);
+  assert.equal(neustartWarten(Number.NaN), null);
 });

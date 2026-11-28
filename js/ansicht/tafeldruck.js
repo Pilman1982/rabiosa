@@ -70,8 +70,11 @@ export function zeige(wurzel, ctx, code, g) {
     const { gruppen } = await sammle(store, code, nr, sitzung);
     if (zu) return;
     const urls = new Map();
-    await Promise.all(benutzteBilder(gruppen).pfade.map(async p => { const url = await bilder.bildUrl(p); if (url) urls.set(p, url); }));
+    // bildLaden gibt nach einer Frist auf (null): Fehlende Bilder erscheinen als Platzhalter, gedruckt wird trotzdem.
+    const pfade = benutzteBilder(gruppen).pfade;
+    await Promise.all(pfade.map(async p => { const url = await bilder.bildUrl(p); if (url) urls.set(p, url); }));
     if (zu) return;
+    const fehlen = pfade.length - urls.size;
     const zonen = Array.isArray(sitzung.zonen) ? sitzung.zonen : [];
     // Für den Druck: das ganze Board und jede Zone einmal (ohne das zweite «Gesamt» der Präsentation).
     const schritte = zonen.length ? praesentationsSchritte(zonen.length).slice(0, -1) : ['gesamt'];
@@ -84,6 +87,7 @@ export function zeige(wurzel, ctx, code, g) {
         h('b', null, T('td.titel'), ' · ', sitzung.titel || ''),
         h('span', { class: 'tdr-zahl' }, T('td.seiten', { n: blaetter.length })),
         h('button', { type: 'button', class: 'knopf', onclick: drucken }, T('druck.drucken')),
+        fehlen > 0 ? h('p', { class: 'tdr-warnung', role: 'status' }, T('td.bilderFehlen')) : null,
         h('p', { class: 'tdr-hilfe' }, T('td.hinweis'))),
       h('div', { class: 'tdr-blaetter' }, blaetter));
     // Erst drucken, wenn Bilder (auch Sticker und Logo) und Schriften bereit sind.

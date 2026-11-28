@@ -22,6 +22,15 @@ export const FARBEN = {
   zettel: ['#FFF6C9', '#FDE2D6', '#DFF3FB', '#E3EFE4', '#EEE8F5'],
 };
 
+/**
+ * Wartezeiten, bevor eine verweigerte Beobachtung eines Mitglieds neu angemeldet wird (Beitritt noch nicht beim
+ * Server angekommen). Nur wenige Versuche, nie sofort.
+ */
+export const NEUSTART_WARTEN_MS = [1000, 3000, 8000, 20000];
+/** Wartezeit vor dem Versuch Nummer «versuch» (ab 0), null = kein Versuch mehr. */
+export const neustartWarten = versuch =>
+  (Number.isInteger(versuch) && versuch >= 0 && versuch < NEUSTART_WARTEN_MS.length ? NEUSTART_WARTEN_MS[versuch] : null);
+
 export const istWhiteboard = q => !!q && q.art === ART;
 
 const leer = s => typeof s !== 'string' || !s.trim();

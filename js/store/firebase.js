@@ -6,7 +6,7 @@
 import { SERVERZEIT, TAG_MS, fehler, spielCode, zufallsKennung } from './gemeinsam.js';
 import { ausRest, restAdresse } from './rest.js';
 import { saubereOrdnerliste } from '../logik/ablage.js';
-import { saeubereElement, bildErlaubt, NAME_MAX } from '../logik/tafel.js';
+import { saeubereElement, bildErlaubt, neustartWarten, NAME_MAX } from '../logik/tafel.js';
 
 /** Version des Firebase JS SDK (modulare API). Nur hier ändern. */
 export const FIREBASE_VERSION = '13.4.0';
@@ -18,6 +18,8 @@ const SCHLUESSEL_MIN = 20;          // wie in firestore.rules
 const STAPEL_GROSS = 200;           // Löschungen pro Stapel, wenn der Server gleiche Regel-Zugriffe nur einmal zählt
 const STAPEL_KLEIN = 10;            // sonst: höchstens 20 Regel-Zugriffe pro Stapel, bis zu 2 pro Löschung
 const AUFRAEUMEN_MAX = 3;           // alte Spiele pro Aufruf von aufraeumen()
+/** So lange darf das Laden eines Whiteboard-Bildes dauern, dann gilt es als fehlend (CORS, Netz). Nur hier ändern. */
+export const TAFELBILD_WARTEN_MS = 15_000;
 const TAFELBILDER_IM_KOPF = 60;     // so viele geladene Whiteboard-Bilder (Blob) merkt sich der Speicher
 // Felder eines Elements ausser id, gruppe, art (wie hasOnly in firestore.rules): Fehlt eines beim Ändern, wird es gelöscht.
 const ELEMENT_FELDER = ['x', 'y', 'b', 'h', 'z', 'farbe', 'text', 'groesse', 'punkte', 'dicke', 'form', 'zeichen',
@@ -98,7 +100,10 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
     storageLaden ||= (async () => {
       let sdk;
       try { sdk = await lade('storage'); } catch (e) { throw fehler('netz', e); }
-      return { sdk, speicher: sdk.getStorage(app) };
+      const speicher = sdk.getStorage(app);
+      // Ohne diese Grenze versucht das SDK ein gescheitertes Herunterladen (CORS, Netz) sehr lange neu.
+      speicher.maxOperationRetryTime = TAFELBILD_WARTEN_MS;
+      return { sdk, speicher };
     })().catch(e => { storageLaden = null; throw e; });
     return storageLaden;
   }
@@ -159,20 +164,52 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
    * Meldet jeden neuen Stand genau einmal. Vor dem ersten Stand vom Server wird nichts gemeldet: Ohne Verbindung
    * liefert Firestore «gibt es nicht» bzw. eine leere Liste aus dem Zwischenspeicher, und das hiesse für die
    * Ansichten «Spiel vorbei», «entfernt» oder «niemand hat geantwortet».
+   * nurBestaetigt: Stände mit eigenem, noch nicht bestätigtem Schreiben auslassen (der Server kennt es noch nicht).
+   * neustart: nach einer Verweigerung fragen, ob es sich lohnt, neu anzumelden (async, true = ja); dann nach
+   * neustartWarten(versuch) erneut, höchstens so oft, wie es dort Wartezeiten gibt.
    */
-  function lausche(ziel, lesen, cb) {
-    let aktiv = true, vomServer = false, zuletzt;
-    const stopp = onSnapshot(ziel, { includeMetadataChanges: true }, snap => {
-      if (!snap.metadata.fromCache) vomServer = true;
-      if (!aktiv || !vomServer) return;
-      const wert = lesen(snap);
-      const bild = JSON.stringify(wert);
-      if (bild === zuletzt) return;   // nur die Begleitangaben haben sich geändert
-      zuletzt = bild;
-      cb(wert);
-    }, e => console.warn('rabiosa: Beobachtung beendet', e));
-    return () => { aktiv = false; stopp(); };
+  function lausche(ziel, lesen, cb, { nurBestaetigt = false, neustart = null } = {}) {
+    let aktiv = true, zuletzt, stopp = () => {}, uhr = null, versuch = 0;
+    function anmelden() {
+      let vomServer = false;
+      stopp = onSnapshot(ziel, { includeMetadataChanges: true }, snap => {
+        if (!snap.metadata.fromCache) vomServer = true;
+        if (!aktiv || !vomServer) return;
+        if (nurBestaetigt && snap.metadata.hasPendingWrites) return;
+        const wert = lesen(snap);
+        const bild = JSON.stringify(wert);
+        if (bild === zuletzt) return;   // nur die Begleitangaben haben sich geändert
+        zuletzt = bild;
+        cb(wert);
+      }, e => {
+        console.warn('rabiosa: Beobachtung beendet', e);
+        if (!aktiv || !neustart || !istVerweigert(e)) return;
+        const warten = neustartWarten(versuch++);
+        if (warten == null) return;
+        uhr = setTimeout(async () => {
+          uhr = null;
+          let lohnt = false;
+          try { lohnt = aktiv && await neustart(); } catch { /* nachsehen ging nicht: aufgeben */ }
+          if (aktiv && lohnt) anmelden();
+        }, warten);
+      });
+    }
+    anmelden();
+    return () => { aktiv = false; if (uhr) clearTimeout(uhr); stopp(); };
   }
+
+  /**
+   * Lohnt es sich, eine verweigerte Beobachtung einer Gruppe neu anzumelden? Nur für ein Mitglied, dessen Eintrag es
+   * gibt, solange die Sitzung offen ist (Beitritt war noch nicht beim Server, als das Board zu lauschen begann).
+   */
+  async function mitgliedNochDa(code) {
+    await auth.authStateReady();
+    const uid = auth.currentUser ? auth.currentUser.uid : null;
+    if (!uid) return false;
+    const [t, m] = await Promise.all([getDoc(tafelRef(code)), getDoc(mitgliedRef(code, uid))]);
+    return t.exists() && t.data().status === 'offen' && m.exists();
+  }
+  const alsMitglied = code => ({ neustart: () => mitgliedNochDa(code) });
 
   // ----- Löschen in Stapeln -----
   /**
@@ -739,8 +776,10 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         // Gleiche Kennung = gleicher Eintrag: Wiederkommen ändert nur Name und Lebenszeichen.
         await tafelSchreiben(code, gruppe, () => setDoc(mitgliedRef(code, uid), { uid, gruppe, name: n, zuletzt: serverTimestamp() }));
       },
+      // Erst der vom Server bestätigte Eintrag zählt: Die Regeln der Gruppe (lesbar) lesen ihn per get(). Käme schon das
+      // lokale Schreiben von beitreten an, begänne das Board zu früh zu lauschen und würde verweigert.
       ichBeobachten: (code, cb) => nachAnmeldung(
-        uid => lausche(mitgliedRef(code, uid), snap => (snap.exists() ? mitZeiten(snap, ['zuletzt']) : null), cb),
+        uid => lausche(mitgliedRef(code, uid), snap => (snap.exists() ? mitZeiten(snap, ['zuletzt']) : null), cb, { nurBestaetigt: true }),
         () => cb(null)),
       mitgliederBeobachten(code, gruppe, cb) {
         // Alle Mitglieder darf nur die Leitung lesen; Studierende fragen immer mit ihrer Gruppe (so verlangt es die Regel).
@@ -748,7 +787,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         const nutzer = auth.currentUser;
         if (gruppe === null && nutzer && (nutzer.isAnonymous || (tafelHost.has(String(code)) && tafelHost.get(String(code)) !== nutzer.uid))) throw fehler('verboten');
         const ziel = gruppe === null ? mitgliederListe(code) : query(mitgliederListe(code), where('gruppe', '==', gruppe));
-        return lausche(ziel, snap => snap.docs.map(d => mitZeiten(d, ['zuletzt'])), cb);
+        return lausche(ziel, snap => snap.docs.map(d => mitZeiten(d, ['zuletzt'])), cb, gruppe === null ? undefined : alsMitglied(code));
       },
       async lebenszeichen(code) {
         await auth.authStateReady();
@@ -760,7 +799,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
       async mitgliedEntfernen(code, uid) { await versuche(() => deleteDoc(mitgliedRef(code, uid))); },
       elementeBeobachten(code, gruppe, cb) {
         const ziel = gruppe === null ? elementeListe(code) : query(elementeListe(code), where('gruppe', '==', gruppe));
-        return lausche(ziel, snap => snap.docs.map(d => d.data()), cb);
+        return lausche(ziel, snap => snap.docs.map(d => d.data()), cb, gruppe === null ? undefined : alsMitglied(code));
       },
       /**
        * Anlegen nur mit { neu: true } (setDoc), sonst ändern (updateDoc, das nie anlegt). Gibt es das Element nicht
@@ -811,7 +850,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         const snap = await versuche(() => getDocs(zaehlerListe(code)));
         return snap.docs.sort((x, y) => Number(x.id) - Number(y.id)).map(d => zaehlerAus(d.data()));
       },
-      zaehlerBeobachten: (code, gruppe, cb) => lausche(zaehlerRef(code, gruppe), snap => zaehlerAus(snap.exists() ? snap.data() : null), cb),
+      zaehlerBeobachten: (code, gruppe, cb) => lausche(zaehlerRef(code, gruppe), snap => zaehlerAus(snap.exists() ? snap.data() : null), cb, alsMitglied(code)),
       async bildHochladen(code, roh, blob) {
         const e = saeubereElement({ ...roh, art: 'bild' });
         if (!e) throw fehler('verboten');
@@ -845,16 +884,24 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         merkeTafelBild(pfad, blob);
         return e;
       },
-      /** Die Datei über einen geprüften Zugriff holen (nie über einen öffentlichen Link). null = gibt es nicht / nicht erlaubt. */
+      /**
+       * Die Datei über einen geprüften Zugriff holen (nie über einen öffentlichen Link). null = gibt es nicht, nicht
+       * erlaubt oder nicht innert TAFELBILD_WARTEN_MS geladen (CORS, Netz); die Ansichten zeigen dann den Platzhalter.
+       */
       async bildLaden(pfad) {
         if (!pfad) return null;
         if (tafelBilder.has(pfad)) { const b = tafelBilder.get(pfad); merkeTafelBild(pfad, b); return b; }
-        const { sdk, speicher } = await storageSdk();
+        let uhr;
+        const frist = new Promise(ok => { uhr = setTimeout(() => ok(null), TAFELBILD_WARTEN_MS); });
+        const laden = (async () => {
+          const { sdk, speicher } = await storageSdk();
+          return sdk.getBlob(sdk.ref(speicher, pfad));
+        })().catch(() => null);
         try {
-          const blob = await sdk.getBlob(sdk.ref(speicher, pfad));
-          merkeTafelBild(pfad, blob);
-          return blob;
-        } catch { return null; }
+          const blob = await Promise.race([laden, frist]);
+          if (blob) merkeTafelBild(pfad, blob);
+          return blob || null;
+        } finally { clearTimeout(uhr); }
       },
     },
   };

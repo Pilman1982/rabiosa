@@ -139,5 +139,7 @@ export async function exportiereHtml(store, sprache, code, gruppe) {
     ]);
     const html = htmlExport({ sitzung, gruppen, bilder, sprache: sp, logo });
     herunterladen(new Blob([html], { type: 'text/html;charset=utf-8' }), dateiname(sitzung, gruppe === null ? null : gruppen[0], 'html'));
+    // bildLaden gibt nach einer Frist auf: Die Datei hat dann Platzhalter, und man soll es wissen.
+    if (benutzteBilder(gruppen).pfade.some(p => !bilder.has(p))) meldung(t(sprache, 'tx.bilderFehlen'));
   } finally { laufend.delete(schluessel); }
 }
