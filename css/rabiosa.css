@@ -742,3 +742,9 @@ button.cl-feld:hover { transform: translateY(-.25cqw); box-shadow: 0 .6cqw 1.2cq
 .te-zone.frei { align-items: center; justify-content: center; border-style: dashed; color: #5c6577; }
 @media (max-width: 820px) { .te-spalten { grid-template-columns: 1fr; } .te-vorschau { position: static; } .gruppenfelder { grid-template-columns: 1fr; } }
 .te .ed-meta .schalter { color: #fff; padding-bottom: 12px; }
+
+/* ---------- Whiteboard: Beitreten am Handy ---------- */
+.tb-titel { font-family: var(--serif); font-size: 26px; margin: 4px 0 8px; font-weight: 600; overflow-wrap: anywhere; }
+.tb-gruppen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 16px; }
+.tb-gruppe { border: 1.5px solid var(--linie); background: #fff; border-radius: 12px; padding: 14px 10px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; cursor: pointer; }
+.tb-gruppe.an { background: var(--kupfer); border-color: var(--kupfer); color: #fff; }

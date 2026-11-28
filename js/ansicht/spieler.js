@@ -312,9 +312,20 @@ export function zeige(wurzel, ctx, code) {
     if (rest <= 0 && !zeitUm && !sendet) { zeitUm = true; zeichne(); }
   }
 
-  let letzteFrage = -1;
+  let letzteFrage = -1, tafelFrage = null;
   function uebernimm(s) {
     if (s && s.art === 'praesentation') { location.replace('#/p/' + code); return; }   // Präsentation: eigene Ansicht ohne Avatar
+    // Kein Spiel mit diesem Code: vielleicht ein Whiteboard (nur wo der Speicher es kennt), sonst «Code falsch».
+    if (s === null && !hatteSpiel && store.tafel && tafelFrage !== 'fertig') {
+      if (tafelFrage) return;
+      tafelFrage = 'laeuft';
+      Promise.resolve().then(() => store.tafel.nachsehen(code)).catch(() => null).then(ts => {
+        tafelFrage = 'fertig';
+        if (zu) return;
+        if (ts) location.replace('#/t/' + code); else uebernimm(null);
+      });
+      return;
+    }
     if (s) hatteSpiel = true;
     spiel = s;
     // Ausweis aus einem früheren Spiel mit zufällig gleichem Code: verwerfen.

@@ -34,6 +34,7 @@ const ANSICHTEN = {
   praesentation: () => import('./ansicht/praesentation.js'),
   folieneditor: () => import('./ansicht/folieneditor.js'),
   tafeleditor: () => import('./ansicht/tafeleditor.js'),
+  tafelbeitritt: () => import('./ansicht/tafelbeitritt.js'),
   // Weitere Whiteboard-Ansichten (tafelbrett, tafelzeigen …) folgen; bis dahin gilt die Startseite.
 };
 
