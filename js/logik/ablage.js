@@ -191,3 +191,15 @@ export function alleOrdner(quizze, leere, ohneFach) {
 /** Was in die Datenbank geht: nur { fach, ordner } als Text in den Grenzen des Editors, höchstens LEERE_MAX. */
 export const saubereOrdnerliste = liste => (Array.isArray(liste) ? liste : []).slice(-LEERE_MAX)
   .map(e => ({ fach: String(e?.fach ?? '').slice(0, FACH_LAENGE), ordner: String(e?.ordner ?? '').slice(0, ORDNER_LAENGE) }));
+
+/**
+ * Vor dem Verschieben: Wird der Ordner, aus dem «quiz» kommt, dadurch leer, kommt er in die Liste der leeren
+ * Ordner, damit er nicht verschwindet. «Ohne Fach» ganz oben wird nicht gemerkt.
+ */
+export function quelleMerken(quizze, leere, quiz, ohneFach) {
+  const fach = String(quiz?.fach ?? '').trim(), ordner = ordnerTeile(quiz?.ordner).join('/');
+  if (!fach && !ordner) return leere;
+  const quelle = pfadVon(quiz, ohneFach);
+  if (quizze.some(q => q.id !== quiz.id && istUnter(q, quelle, ohneFach))) return leere;
+  return [...leere, { fach, ordner }];
+}

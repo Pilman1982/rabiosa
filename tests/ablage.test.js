@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX } from '../js/logik/ablage.js';
+import { ordnerTeile, pfadVon, inhaltVon, suche, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, ordnerNameFehler, umbenennen, ordnerEntfernen, leereAufraeumen, alleOrdner, LEERE_MAX, quelleMerken } from '../js/logik/ablage.js';
 
 const q = (titel, fach, ordner, mehr = {}) => ({ id: titel, titel, fach, ordner, autor: 'Anna Muster', fragen: [], ...mehr });
 
@@ -166,4 +166,12 @@ test('Regeln: ordnerlisten nur für die eigene Person, Grenze wie LEERE_MAX', as
   assert.equal(Number(block.match(/liste\.size\(\) <= (\d+)/)[1]), LEERE_MAX);
   const speicher = readFileSync(new URL('../js/store/firebase.js', import.meta.url), 'utf8');
   assert.ok(speicher.includes("doc(db, 'ordnerlisten', "), 'firebase.js muss dieselbe Sammlung benutzen');
+});
+
+test('quelleMerken: wird ein Ordner durch Verschieben leer, bleibt er als leerer Ordner stehen', () => {
+  const a = q('A', 'KUT', 'HS26/Final'), b = q('B', 'KUT', 'HS26/Final'), c = q('C', 'KUT', 'HS26');
+  assert.deepEqual(quelleMerken([a, b, c], [], a, 'Ohne Fach'), [], 'B liegt noch im Ordner');
+  assert.deepEqual(quelleMerken([a, c], [], a, 'Ohne Fach'), [{ fach: 'KUT', ordner: 'HS26/Final' }]);
+  assert.deepEqual(quelleMerken([c], [{ fach: 'X', ordner: '' }], c, 'Ohne Fach'), [{ fach: 'X', ordner: '' }, { fach: 'KUT', ordner: 'HS26' }]);
+  assert.deepEqual(quelleMerken([q('D', '', '')], [], q('D', '', ''), 'Ohne Fach'), [], '«Ohne Fach» selbst wird nicht gemerkt');
 });

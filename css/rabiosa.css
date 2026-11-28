@@ -313,6 +313,16 @@ body[data-ansicht="studio"], body[data-ansicht="editor"], body[data-ansicht="rue
 .etikett.art.quiz { background: #e3e7ee; color: var(--navy); }
 .etikett.art.praesentation { background: #e0eef2; color: var(--petrol); }
 .etikett.art.whiteboard { background: #fbe9e2; color: var(--kupfer-dunkel); }
+/* Ordner verwalten: neuer Ordner, Ziehen, Auswahl beim Verschieben */
+.ordner.neu { border-style: dashed; color: var(--kupfer); background: transparent; justify-content: center; }
+.ordner.ziel, .krume.ziel { outline: 2px solid var(--kupfer); outline-offset: 2px; background: #fbe9e2; }
+.ordnerwerkzeug { display: inline-flex; gap: 6px; margin-left: 12px; }
+.karte[draggable="true"] { cursor: grab; }
+.ordnerbaum { display: flex; flex-direction: column; max-height: 50vh; overflow: auto; margin: 8px 0 14px; min-width: 320px; }
+.baumknopf { border: 0; background: transparent; text-align: left; padding: 8px 12px; border-radius: 8px; color: var(--navy); font-weight: 600; }
+.baumknopf:hover:not(:disabled), .baumknopf:focus-visible { background: var(--papier); }
+.baumknopf:disabled { color: var(--text-leise); cursor: default; }
+.hierliegt { font-weight: 400; }
 .ordnerzahl { font-size: 12.5px; color: var(--text-leise); background: var(--papier); border-radius: 99px; padding: 2px 9px; }
 .trefferzahl { font-size: 13.5px; color: var(--text-leise); margin: 0 0 12px; }
 .karte .ablageort { font-size: 12.5px; color: var(--kupfer-dunkel); margin: 0; overflow-wrap: anywhere; }

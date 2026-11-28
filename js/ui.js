@@ -67,6 +67,23 @@ export function rueckfrage(sprache, text, jaText) {
   });
 }
 
+/** Rückfrage mit einem Textfeld. Ergebnis: der Text, oder null bei Abbrechen. Enter bestätigt. */
+export function eingabeFrage(sprache, text, vorgabe = '', jaText) {
+  return new Promise(fertig => {
+    const feld = h('input', { class: 'feld', value: vorgabe, maxlength: '80', autocomplete: 'off', 'aria-label': text });
+    const d = h('dialog', { class: 'rueckfrage' },
+      h('form', { method: 'dialog', onsubmit: e => { e.preventDefault(); d.close('ja'); } },
+        h('label', null, h('span', { class: 'lab' }, text), feld),
+        h('div', { class: 'knopfzeile' },
+          h('button', { type: 'button', class: 'knopf leise', onclick: () => d.close('nein') }, t(sprache, 'allg.abbrechen')),
+          h('button', { type: 'submit', class: 'knopf' }, jaText || t(sprache, 'allg.ok')))));
+    d.addEventListener('close', () => { d.remove(); fertig(d.returnValue === 'ja' ? feld.value : null); });
+    document.body.append(d);
+    d.showModal();
+    feld.select();
+  });
+}
+
 /** Kurze Meldung am unteren Rand. */
 export function meldung(text) {
   const el = h('div', { class: 'meldung', role: 'status' }, text);

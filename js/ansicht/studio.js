@@ -1,10 +1,11 @@
 // Studio der Dozierenden: anmelden, eigene Quiz verwalten, Quiz des Kollegiums spielen oder kopieren.
-import { h, svg, marke, rueckfrage, meldung, fehlerText } from '../ui.js';
+import { h, svg, marke, rueckfrage, eingabeFrage, meldung, fehlerText } from '../ui.js';
 import { t } from '../i18n.js';
 import { neuesQuiz, beispielQuiz, quizFehler } from '../logik/quiz.js';
 import { oeffneImport } from './importfenster.js';
 import { neuesSpiel } from '../logik/spiel.js';
-import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, leereAufraeumen, ARTEN } from '../logik/ablage.js';
+import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, zuletzt, zielVon, istUnter, leereAufraeumen, ARTEN,
+  ORDNER_TIEFE, ordnerNameFehler, umbenennen, ordnerEntfernen, alleOrdner, quelleMerken } from '../logik/ablage.js';
 import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
@@ -47,8 +48,9 @@ export function zeige(wurzel, ctx) {
       kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
       leere = leereAufraeumen(l, m, T('studio.ohneFach'));
       if (leere.length < l.length) store.ordner.speichern(leere).catch(() => {});
+      // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen; dazu die eigenen leeren.
+      try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium, ...leere]))); } catch { /* ohne Speicher */ }
       // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen.
-      try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium]))); } catch { /* ohne Speicher */ }
     } catch (e) { meldung(fehlerText(s(), e)); meine ??= []; kollegium ??= []; }
     zeichne();
   }
@@ -165,7 +167,8 @@ export function zeige(wurzel, ctx) {
     const haken = h('input', { type: 'checkbox', checked: !!q.freigegeben });
     // Erst frisch laden: Die Liste kann älter sein als die letzte Änderung im Editor.
     haken.addEventListener('change', () => { const frei = haken.checked; tue(async () => store.quiz.speichern({ ...await store.quiz.laden(q.id), freigegeben: frei })); });
-    return h('article', { class: 'karte' },
+    return h('article', { class: 'karte', draggable: 'true',
+      ondragstart: e => { e.dataTransfer.setData(ZIEH_ART, q.id); e.dataTransfer.effectAllowed = 'move'; } },
       artEtikett(q),
       h('h3', null, titel),
       h('p', { class: 'meta' }, meta(q)),
@@ -176,6 +179,7 @@ export function zeige(wurzel, ctx) {
         unvollstaendig ? null : startKnoepfe(q),
         h('a', { class: 'knopf klein leise', href: bearbeiten(q) }, T('studio.bearbeiten')),
         h('a', { class: 'knopf klein leise', href: '#/studio/rueckblick/' + q.id }, rueckblickText(q)),
+        kleinerKnopf(T('studio.verschieben'), () => verschiebenDialog(q)),
         kleinerKnopf(T('studio.duplizieren'), () => tue(() => kopiereQuiz(store, q, `${titel} (${T('studio.kopie')})`))),
         kleinerKnopf(T('studio.loeschen'), async () => { if (await rueckfrage(s(), T('studio.loeschenFrage', { titel }), T('studio.loeschen'))) tue(() => store.quiz.loeschen(q.id)); }, 'leise gefahr')));
   }
@@ -228,6 +232,92 @@ export function zeige(wurzel, ctx) {
       ARTEN.filter(k => zahlen[k] > 0).map(k => knopf(k, T(ART_KNOPF[k], { n: zahlen[k] }))));
   }
 
+  // ---------- Ordner verwalten (nur «Meine») ----------
+  const ZIEH_ART = 'text/x-rabiosa';
+  const ohneFach = () => T('studio.ohneFach');
+  const sauberName = name => String(name ?? '').trim().replace(/\s+/g, ' ');
+  const liegtGenau = (q, p) => pfadVon(q, ohneFach()).length === p.length && istUnter(q, p, ohneFach());
+
+  /** Inhalt in einen Ordner legen; liegt er schon dort, passiert nichts. Der Ordner, aus dem er kommt, bleibt stehen. */
+  function verschiebe(q, ziel) {
+    if (liegtGenau(q, ziel)) return;
+    const neueLeere = quelleMerken(meine, leere, q, ohneFach());
+    tue(async () => {
+      if (neueLeere !== leere) await store.ordner.speichern(neueLeere);
+      await store.quiz.verschieben(q.id, zielVon(ziel, ohneFach()));
+    });
+  }
+
+  function verschiebenDialog(q) {
+    const titel = q.titel || T('editor.unbenannt');
+    const d = h('dialog', { class: 'rueckfrage ordnerwahl' },
+      h('p', null, T('studio.verschiebenNach', { titel })),
+      h('div', { class: 'ordnerbaum' }, alleOrdner(meine, leere, ohneFach()).map(p => {
+        const hier = liegtGenau(q, p);
+        return h('button', { type: 'button', class: 'baumknopf', style: `padding-left: ${12 + (p.length - 1) * 20}px`, disabled: hier,
+          onclick: () => { d.close(); verschiebe(q, p); } },
+        p.at(-1), hier ? h('span', { class: 'hierliegt' }, ' · ' + T('studio.hierLiegt')) : null);
+      })),
+      h('div', { class: 'knopfzeile' }, h('button', { type: 'button', class: 'knopf leise', onclick: () => d.close() }, T('allg.abbrechen'))));
+    d.addEventListener('close', () => d.remove());
+    document.body.append(d);
+    d.showModal();
+  }
+
+  async function neuerOrdner(pfad, inhalt) {
+    const name = await eingabeFrage(s(), T('studio.ordnerName'), '', T('studio.anlegen'));
+    if (name === null) return;
+    const fehler = ordnerNameFehler(name, pfad, inhalt.ordner.map(o => o.name));
+    if (fehler) { meldung(T('studio.ordnerFehler.' + fehler)); return; }
+    const neu = [...pfad, sauberName(name)];
+    tue(async () => {
+      await store.ordner.speichern([...leere, zielVon(neu, ohneFach())]);
+      lage.meine.pfad = neu;
+    });
+  }
+
+  async function ordnerUmbenennen(pfad) {
+    const alt = pfad.at(-1);
+    const name = await eingabeFrage(s(), T('studio.umbenennenFrage'), alt, T('studio.umbenennen'));
+    if (name === null || sauberName(name) === alt) return;
+    const geschwister = inhaltVon(meine, pfad.slice(0, -1), ohneFach(), leere).ordner.map(o => o.name).filter(n => n !== alt);
+    const fehler = ordnerNameFehler(name, pfad.slice(0, -1), geschwister);
+    if (fehler) { meldung(T('studio.ordnerFehler.' + fehler)); return; }
+    const r = umbenennen(meine, leere, pfad, name, ohneFach());
+    tue(async () => {
+      for (const a of r.aenderungen) await store.quiz.verschieben(a.id, a);
+      await store.ordner.speichern(r.leere);
+      lage.meine.pfad = [...pfad.slice(0, -1), sauberName(name)];
+    });
+  }
+
+  async function ordnerLoeschen(pfad) {
+    if (!(await rueckfrage(s(), T('studio.ordnerLoeschenFrage', { name: pfad.at(-1) }), T('studio.ordnerLoeschen')))) return;
+    tue(async () => {
+      await store.ordner.speichern(ordnerEntfernen(leere, pfad, ohneFach()));
+      lage.meine.pfad = pfad.slice(0, -1);
+    });
+  }
+
+  /** Knöpfe zum Verwalten für die Ablage in «Meine»: Umbenennen und Löschen hinter den Brotkrumen, «+ Neuer Ordner». */
+  function verwaltung(pfad, inhalt) {
+    const belegt = meine.some(q => istUnter(q, pfad, ohneFach()));
+    return {
+      hinterKrumen: pfad.length ? h('span', { class: 'ordnerwerkzeug' },
+        pfad.length >= 2 ? kleinerKnopf(T('studio.umbenennen'), () => ordnerUmbenennen(pfad)) : null,
+        h('button', { class: 'knopf klein leise gefahr', disabled: belegt, title: belegt ? T('studio.ordnerNichtLeer') : null,
+          onclick: () => ordnerLoeschen(pfad) }, T('studio.ordnerLoeschen'))) : null,
+      ordnerEnde: pfad.length > ORDNER_TIEFE ? null
+        : h('button', { type: 'button', class: 'ordner neu', onclick: () => neuerOrdner(pfad, inhalt) }, T('studio.neuerOrdner')),
+    };
+  }
+
+  /** Abgelegt per Ziehen auf einen Ordner oder eine Brotkrume. */
+  function ablegen(id, ziel) {
+    const q = meine.find(x => x.id === id);
+    if (q) verschiebe(q, ziel);
+  }
+
   function inhalt() {
     if (reiter === 'meine') {
       if (!meine) return h('p', { class: 'leer' }, T('allg.laedt'));
@@ -235,7 +325,7 @@ export function zeige(wurzel, ctx) {
         h('div', { class: 'aktionen' }, neuMenue(), h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import'))),
         meine.length || leere.length
           ? [artenLeiste(meine), ablage({
-            quizze: meine, leer: leere, stand: lage.meine, karte: meineKarte,
+            quizze: meine, leer: leere, stand: lage.meine, karte: meineKarte, extras: verwaltung, ablegen,
             wurzelText: T('studio.wurzelMeine'), suchText: T('studio.suchen'),
             oben: sichtbar => (sichtbar.length ? [
               h('h2', { class: 'fachtitel' }, T('studio.zuletzt')),
@@ -259,17 +349,25 @@ export function zeige(wurzel, ctx) {
    * stand = { pfad, anfrage } des Reiters. oben(sichtbar): auf der obersten Stufe ohne Suche vor den Ordnern.
    * extras(pfad, inhalt, geheZu) -> { hinterKrumen, ordnerEnde }: Zusätzliches zum Verwalten der Ordner.
    */
-  function ablage({ quizze, leer, stand, karte, wurzelText, suchText, oben = () => [], extras = () => ({}) }) {
+  function ablage({ quizze, leer, stand, karte, wurzelText, suchText, oben = () => [], extras = () => ({}), ablegen = null }) {
     const ohne = T('studio.ohneFach');
     const feld = h('input', { class: 'feld suchfeld', type: 'search', value: stand.anfrage, placeholder: suchText, 'aria-label': suchText });
     const bereich = h('div', { class: 'ablage' });
     const geheZu = neu => { stand.pfad = neu; fuelle(); };
+    /** Mit «ablegen» nehmen Ordner und Brotkrumen gezogene Karten an. */
+    const ziehZiel = (el, ziel) => {
+      if (!ablegen) return el;
+      el.addEventListener('dragover', e => { if (e.dataTransfer.types.includes(ZIEH_ART)) { e.preventDefault(); el.classList.add('ziel'); } });
+      el.addEventListener('dragleave', () => el.classList.remove('ziel'));
+      el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('ziel'); const id = e.dataTransfer.getData(ZIEH_ART); if (id) ablegen(id, ziel); });
+      return el;
+    };
     const krume = (text, ziel, hier) => hier
       ? h('span', { 'aria-current': 'page' }, text)
-      : h('button', { type: 'button', class: 'krume', onclick: () => geheZu(ziel) }, text);
-    const ordnerKnopf = o => h('button', { type: 'button', class: 'ordner', onclick: () => geheZu([...stand.pfad, o.name]) },
+      : ziehZiel(h('button', { type: 'button', class: 'krume', onclick: () => geheZu(ziel) }, text), ziel);
+    const ordnerKnopf = o => ziehZiel(h('button', { type: 'button', class: 'ordner', onclick: () => geheZu([...stand.pfad, o.name]) },
       svg('<svg class="ordnerbild" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v8.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" fill="currentColor"/></svg>'),
-      h('span', { class: 'ordnername' }, o.name), h('span', { class: 'ordnerzahl' }, String(o.anzahl)));
+      h('span', { class: 'ordnername' }, o.name), h('span', { class: 'ordnerzahl' }, String(o.anzahl))), [...stand.pfad, o.name]);
     /** Ein eigener leerer Ordner bleibt offen, auch wenn nichts darin liegt. */
     const istLeererOrdner = p => leer.some(e => istUnter(e, p, ohne));
     // Nur dieser Bereich wird neu gezeichnet: Das Suchfeld behält beim Tippen den Fokus.
@@ -288,7 +386,7 @@ export function zeige(wurzel, ctx) {
         stand.pfad = stand.pfad.slice(0, -1);
         inhalt = inhaltVon(sichtbar, stand.pfad, ohne, leer);
       }
-      const mehr = extras(stand.pfad, inhalt, geheZu);
+      const mehr = extras(stand.pfad, inhalt);
       bereich.replaceChildren(...[   // replaceChildren schriebe «null» als Text hin, darum gefiltert
         stand.pfad.length ? h('nav', { class: 'brotkrumen', 'aria-label': T('studio.ablage') },
           krume(wurzelText, [], false),
