@@ -37,3 +37,18 @@ test('CORS: nur GET für die eigene Seite und den lokalen Server', () => {
   assert.deepEqual(cors[0].method, ['GET']);
   assert.deepEqual([...cors[0].origin].sort(), ['http://localhost:8765', 'https://pilman1982.github.io']);
 });
+
+test('Zähler-Regel: nur Bilder, genau plus oder minus eins und die Grösse des Bildes', () => {
+  const start = tafeln.indexOf('match /zaehler/{g}');
+  const z = tafeln.slice(start, tafeln.indexOf('match /elemente/{id}'));
+  assert.ok(z.includes('getAfter('));
+  assert.ok(z.includes(".data.art == 'bild'"));
+  assert.ok(z.includes('resource.data.bilder + 1'));
+  assert.ok(z.includes('resource.data.bilder - 1'));
+  assert.ok(z.includes('.bildBytes'));
+});
+
+test('Storage: nach dem Abgeben dürfen Mitglieder keine Dateien mehr löschen', () => {
+  const zeile = speicher.split('\n').find(l => l.includes('allow delete'));
+  assert.ok(zeile.includes('gesperrt'), zeile);
+});

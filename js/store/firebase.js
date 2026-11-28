@@ -87,7 +87,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   catch { db = fs.getFirestore(app); }   // war schon eingerichtet
 
   const { doc, collection, query, where, limit, getDoc, getDocFromServer, getDocs, setDoc, updateDoc, deleteDoc,
-    onSnapshot, writeBatch, serverTimestamp, Timestamp } = fs;
+    onSnapshot, writeBatch, serverTimestamp, arrayUnion, Timestamp } = fs;
 
   // Storage (Bilder des Whiteboards) wird erst gebraucht, wenn ein Bild kommt: kein Vorladen in index.html.
   let storageLaden;
@@ -289,6 +289,27 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
   const zaehlerAus = d => ({ bilder: d?.bilder || 0, bytes: d?.bytes || 0, letztes: d?.letztes || '' });
 
   /**
+   * Warum haben die Regeln etwas verweigert? Sitzung weg = nichtGefunden (wird geworfen); sonst gilt:
+   * leitung = der Aufrufer ist die Leitung; eigene = Mitglied dieser Gruppe; zu = beendet oder Gruppe gesperrt.
+   */
+  async function verweigerungsLage(code, gruppe) {
+    let tafel = null, ich = null, leitung = false;
+    try {
+      const snap = await getDoc(tafelRef(code));
+      if (!snap.exists()) throw fehler('nichtGefunden');
+      tafel = snap.data();
+      const uid = auth.currentUser ? auth.currentUser.uid : null;
+      leitung = !!uid && tafel.hostUid === uid;
+      if (uid && !leitung) { const m = await getDoc(mitgliedRef(code, uid)); ich = m.exists() ? m.data() : null; }
+    } catch (e2) { if (e2 && e2.code === 'nichtGefunden') throw e2; /* unklar: bleibt bei «verboten» */ }
+    return {
+      leitung,
+      eigene: !!ich && ich.gruppe === gruppe,
+      zu: !!tafel && (tafel.status !== 'offen' || (tafel.gesperrt || []).includes(gruppe)),
+    };
+  }
+
+  /**
    * Schreibvorgang auf dem Board. Verweigern die Regeln ihn, wird nachgesehen warum (wie spiel.beitreten):
    * Sitzung weg = nichtGefunden; Mitglied der Gruppe, aber beendet oder gesperrt = abgegeben; sonst verboten.
    */
@@ -296,18 +317,34 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
     try { return await aktion(); }
     catch (e) {
       if (!istVerweigert(e)) throw uebersetze(e);
-      let tafel = null, ich = null;
-      try {
-        const snap = await getDoc(tafelRef(code));
-        if (!snap.exists()) throw fehler('nichtGefunden', e);
-        tafel = snap.data();
-        const uid = auth.currentUser ? auth.currentUser.uid : null;
-        if (uid && tafel.hostUid !== uid) { const m = await getDoc(mitgliedRef(code, uid)); ich = m.exists() ? m.data() : null; }
-      } catch (e2) { if (e2 && e2.message === 'rabiosa:nichtGefunden') throw e2; /* unklar: bleibt bei «verboten» */ }
-      const eigene = !!ich && ich.gruppe === gruppe;
-      const zu = !!tafel && (tafel.status !== 'offen' || (tafel.gesperrt || []).includes(gruppe));
-      throw fehler(eigene && zu ? 'abgegeben' : 'verboten', e);
+      const lage = await verweigerungsLage(code, gruppe);
+      throw fehler(lage.eigene && lage.zu ? 'abgegeben' : 'verboten', e);
     }
+  }
+
+  /**
+   * Ein Element vorab lesen. Die Leseregel verweigert auch, wenn es das Element nicht (mehr) gibt: Dann ist es
+   * für Leitung und Mitglied der Gruppe einfach nicht da (null); nach beendet oder gesperrt heisst es abgegeben.
+   */
+  async function elementLesen(code, gruppe, id) {
+    try { return await getDoc(elementRef(code, id)); }
+    catch (e) {
+      if (!istVerweigert(e)) throw uebersetze(e);
+      const lage = await verweigerungsLage(code, gruppe);
+      if (lage.eigene && lage.zu) throw fehler('abgegeben', e);
+      if (lage.eigene || lage.leitung) return null;
+      throw fehler('verboten', e);
+    }
+  }
+
+  /** Löscht ein Bild-Element samt Zähler in einem Stapel (die Regeln verlangen beides zusammen); gibt den neuen Zähler zurück. */
+  async function bildElementLoeschen(code, e, zaehler) {
+    const neu = { bilder: Math.max(0, zaehler.bilder - 1), bytes: Math.max(0, zaehler.bytes - (e.bildBytes || 0)), letztes: e.id };
+    const stapel = writeBatch(db);
+    stapel.delete(elementRef(code, e.id));
+    stapel.update(zaehlerRef(code, e.gruppe), neu);
+    await stapel.commit();
+    return neu;
   }
 
   /** Startet einen Zuhörer erst, wenn die Anmeldung geklärt ist; gibt sofort die Stopp-Funktion zurück. */
@@ -643,7 +680,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
           if (t.data().status !== 'offen') throw fehler('abgegeben');
           const alt = t.data().gesperrt || [];
           if (alt.includes(gruppe)) return;
-          await tafelSchreiben(code, gruppe, () => updateDoc(tafelRef(code), { gesperrt: [...new Set([...alt, gruppe])] }));
+          await tafelSchreiben(code, gruppe, () => updateDoc(tafelRef(code), { gesperrt: arrayUnion(gruppe) }));
         });
       },
       async meine(vorlageId) {
@@ -654,8 +691,8 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
           .sort((a, b) => (b.erstellt || 0) - (a.erstellt || 0));
       },
       /**
-       * Alles der Sitzung: zuerst die Bilddateien, dann die Elemente (Bilder einzeln samt Zähler, so verlangen es
-       * die Regeln), Mitglieder, Zähler und zuletzt die Sitzung selbst.
+       * Alles der Sitzung: Bild-Elemente einzeln samt Zähler (so verlangen es die Regeln; die Datei erst, wenn der
+       * Stapel durch ist), dann die übrigen Elemente, Mitglieder, Zähler und zuletzt die Sitzung selbst.
        */
       async loeschen(code) {
         const user = await brauchtKonto();
@@ -667,10 +704,10 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
             getDocs(elementeListe(code)), getDocs(mitgliederListe(code)), getDocs(zaehlerListe(code))]);
           const alle = elemente.docs.map(d => d.data());
           const bilder = alle.filter(e => e.art === 'bild');
-          for (const e of bilder) if (e.bildPfad) { await dateiLoeschen(e.bildPfad); tafelBilder.delete(e.bildPfad); }
           const stand = Object.fromEntries(zaehler.docs.map(d => [d.id, zaehlerAus(d.data())]));
           for (const e of bilder) {
             stand[e.gruppe] = await bildElementLoeschen(code, e, stand[e.gruppe] || zaehlerAus());
+            if (e.bildPfad) { tafelBilder.delete(e.bildPfad); await dateiLoeschen(e.bildPfad); }
           }
           await loescheAlle([
             ...elemente.docs.filter(d => d.data().art !== 'bild').map(d => d.ref),
@@ -704,7 +741,9 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         () => cb(null)),
       mitgliederBeobachten(code, gruppe, cb) {
         // Alle Mitglieder darf nur die Leitung lesen; Studierende fragen immer mit ihrer Gruppe (so verlangt es die Regel).
-        if (gruppe === null && (!istKonto() || (tafelHost.has(String(code)) && tafelHost.get(String(code)) !== auth.currentUser.uid))) throw fehler('verboten');
+        // Verboten nur, wenn sicher: ein Gast, oder ein Konto, das nicht die bekannte Leitung ist. Sonst entscheidet die Regel.
+        const nutzer = auth.currentUser;
+        if (gruppe === null && nutzer && (nutzer.isAnonymous || (tafelHost.has(String(code)) && tafelHost.get(String(code)) !== nutzer.uid))) throw fehler('verboten');
         const ziel = gruppe === null ? mitgliederListe(code) : query(mitgliederListe(code), where('gruppe', '==', gruppe));
         return lausche(ziel, snap => snap.docs.map(d => mitZeiten(d, ['zuletzt'])), cb);
       },
@@ -713,7 +752,7 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         const uid = auth.currentUser ? auth.currentUser.uid : null;
         if (!uid) return;
         try { await updateDoc(mitgliedRef(code, uid), { zuletzt: serverTimestamp() }); }
-        catch (e) { if (e && e.code === 'not-found') return; throw uebersetze(e); }
+        catch (e) { if (e && e.code === 'not-found') return; if (istVerweigert(e)) return; throw uebersetze(e); }   // nach «beendet»: still
       },
       async mitgliedEntfernen(code, uid) { await versuche(() => deleteDoc(mitgliedRef(code, uid))); },
       elementeBeobachten(code, gruppe, cb) {
@@ -725,15 +764,15 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         if (!e) throw fehler('verboten');
         if (e.art === 'bild') {
           // Bilder entstehen nur über bildHochladen; hier nur Lage und Aussehen. Pfad und Grösse bleiben, wie sie sind.
-          const alt = await versuche(() => getDoc(elementRef(code, e.id)));
-          if (!alt.exists() || alt.data().art !== 'bild' || alt.data().gruppe !== e.gruppe) throw fehler('verboten');
+          const alt = await elementLesen(code, e.gruppe, e.id);
+          if (!alt || !alt.exists() || alt.data().art !== 'bild' || alt.data().gruppe !== e.gruppe) throw fehler('verboten');
           e.bildPfad = alt.data().bildPfad; e.bildBytes = alt.data().bildBytes;
         }
         await tafelSchreiben(code, e.gruppe, () => setDoc(elementRef(code, e.id), e));
       },
       async elementLoeschen(code, element) {
-        const snap = await versuche(() => getDoc(elementRef(code, element.id)));
-        if (!snap.exists()) return;
+        const snap = await elementLesen(code, element.gruppe, element.id);
+        if (!snap || !snap.exists()) return;
         const e = snap.data();
         if (e.art !== 'bild') {
           await tafelSchreiben(code, e.gruppe, () => deleteDoc(elementRef(code, e.id)));
@@ -750,21 +789,32 @@ export async function erstelleFirebaseStore(config, { lade = name => import(`${C
         const e = saeubereElement({ ...roh, art: 'bild' });
         if (!e) throw fehler('verboten');
         const { sdk, speicher } = await storageSdk();
-        const [alt, zSnap] = await versuche(() => Promise.all([getDoc(elementRef(code, e.id)), getDoc(zaehlerRef(code, e.gruppe))]));
-        if (alt.exists()) throw fehler('verboten');   // ein Bild entsteht einmal; ersetzen = löschen und neu
-        if (bildErlaubt(zaehlerAus(zSnap.data()), blob.size)) throw fehler('grenze');
+        // Das neue Element nicht vorab lesen: Die Leseregel verweigert es für Gäste, solange es das Element nicht gibt.
+        // Ersetzen verhindern die Regeln selbst (Storage: kein Überschreiben; Firestore: Bildangaben bleiben).
+        const zSnap = await tafelSchreiben(code, e.gruppe, () => getDoc(zaehlerRef(code, e.gruppe)));
+        let z = zaehlerAus(zSnap.data());
+        if (bildErlaubt(z, blob.size)) throw fehler('grenze');
         const pfad = 'tafeln/' + code + '/' + e.gruppe + '/' + e.id;
-        const z = zaehlerAus(zSnap.data());
         e.bildPfad = pfad; e.bildBytes = blob.size;
         await tafelSchreiben(code, e.gruppe, () => sdk.uploadBytes(sdk.ref(speicher, pfad), blob, { contentType: blob.type }));
-        try {
-          await tafelSchreiben(code, e.gruppe, async () => {
+        for (let versuch = 0; ; versuch++) {
+          try {
             const stapel = writeBatch(db);
             stapel.set(elementRef(code, e.id), e);
             stapel.update(zaehlerRef(code, e.gruppe), { bilder: z.bilder + 1, bytes: z.bytes + blob.size, letztes: e.id });
             await stapel.commit();
-          });
-        } catch (err) { dateiLoeschen(pfad); throw err; }
+            break;
+          } catch (err) {
+            // Verweigert, weil gleichzeitig ein anderes Gerät derselben Gruppe ein Bild gesetzt hat (Zähler veraltet)?
+            if (versuch === 0 && istVerweigert(err)) {
+              try { z = zaehlerAus((await getDoc(zaehlerRef(code, e.gruppe))).data()); } catch { /* bleibt beim Fehler unten */ }
+              if (!bildErlaubt(z, blob.size)) continue;
+            }
+            dateiLoeschen(pfad);
+            if (bildErlaubt(z, blob.size)) throw fehler('grenze', err);
+            await tafelSchreiben(code, e.gruppe, () => { throw err; });
+          }
+        }
         merkeTafelBild(pfad, blob);
         return e;
       },

@@ -196,8 +196,16 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['bilder', 'bytes', 'letztes'])
           && request.resource.data.bilder is int && request.resource.data.bilder >= 0 && request.resource.data.bilder <= 40
           && request.resource.data.bytes is int && request.resource.data.bytes >= 0 && request.resource.data.bytes <= 104857600
-          && existsAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes))
-            != exists(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes));
+          // Nur im Takt mit einem Bild: Das Element «letztes» entsteht (+1) oder verschwindet (-1), und der Zähler
+          // ändert sich um genau ein Bild und dessen Grösse.
+          && ((existsAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)) && !exists(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes))
+              && getAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)).data.art == 'bild'
+              && request.resource.data.bilder == resource.data.bilder + 1
+              && request.resource.data.bytes == resource.data.bytes + getAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)).data.bildBytes)
+            || (exists(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)) && !existsAfter(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes))
+              && get(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)).data.art == 'bild'
+              && request.resource.data.bilder == resource.data.bilder - 1
+              && request.resource.data.bytes == resource.data.bytes - get(/databases/$(database)/documents/tafeln/$(code)/elemente/$(request.resource.data.letztes)).data.bildBytes));
         allow delete: if angemeldet() && leitung();
       }
 

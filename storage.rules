@@ -14,7 +14,7 @@ service firebase.storage {
       allow create: if request.auth != null && (leitung() || (mitglied() && !(int(gruppe) in t().gesperrt)))
         && request.resource.size <= 8 * 1024 * 1024
         && request.resource.contentType.matches('image/(png|jpeg|webp|gif)');
-      allow delete: if request.auth != null && (leitung() || mitglied());
+      allow delete: if request.auth != null && (leitung() || (mitglied() && !(int(gruppe) in t().gesperrt)));
       allow update: if false;
     }
   }
