@@ -11,7 +11,7 @@
 //   #/studio/folien/ID      Editor einer Präsentation
 // Whiteboard (nur Fassung der Dozierenden, in der Student-Fassung führen alle auf die Startseite):
 //   #/studio/whiteboard/ID  Editor einer Whiteboard-Vorlage
-//   #/studio/tafeln/ID      Ergebnisse einer Vorlage
+//   #/studio/tafeln/ID      Ergebnisse einer Vorlage;  #/studio/tafeln/ohne-vorlage  alle Sitzungen ohne Vorlage
 //   #/tafel/CODE            Übersicht der Sitzung (Leitung)
 //   #/tafel/CODE/G          Board der Gruppe G (ab 0)
 //   #/tafel/CODE/G/zeigen   Gruppe zeigen

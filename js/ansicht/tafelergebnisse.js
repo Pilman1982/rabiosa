@@ -3,9 +3,12 @@
 // Nur für die angemeldete, freigeschaltete Lehrperson. Den Speicher je Sitzung liest store.tafel.zaehlerLesen einmalig.
 // Ist die Vorlage weg (gelöscht oder im Kollegium nicht mehr freigegeben), erscheinen die Sitzungen trotzdem, mit dem
 // Titel aus der Sitzung: Sonst blieben sie samt Bildern unerreichbar im Speicher.
+// Unter #/studio/tafeln/ohne-vorlage (OHNE_VORLAGE) stehen alle eigenen Sitzungen, deren Vorlage im Studio fehlt,
+// jede mit ihrem Titel; das Studio verlinkt diese Liste, sobald es solche Sitzungen gibt.
 import { h, marke, meldung, fehlerText, rueckfrage, datum } from '../ui.js';
 import { t } from '../i18n.js';
-import { megabyte, speicherSumme, zeilenStand, ergebnisTitel } from '../logik/tafelergebnisse.js';
+import { quizFehler } from '../logik/quiz.js';
+import { megabyte, speicherSumme, zeilenStand, ergebnisTitel, ohneVorlage, OHNE_VORLAGE } from '../logik/tafelergebnisse.js';
 
 export function zeige(wurzel, ctx, vorlageId) {
   const { store } = ctx;
@@ -13,6 +16,7 @@ export function zeige(wurzel, ctx, vorlageId) {
   const T = (k, w) => t(s, k, w);
   let zu = false, gestartet = false;
   let vorlage = null;              // null: gelöscht oder nicht (mehr) freigegeben; die Sitzungen erscheinen trotzdem
+  const sammel = vorlageId === OHNE_VORLAGE;   // alle Sitzungen ohne Vorlage statt die einer Vorlage
   const melde = e => meldung(fehlerText(s, e));
   const offeneWahl = new Set();    // Codes, bei denen die Gruppenwahl für «Präsentieren» offen ist
 
@@ -62,6 +66,7 @@ export function zeige(wurzel, ctx, vorlageId) {
       (sitzung.gruppen || []).map((name, i) => h('a', { class: 'chip', href: `#/tafel/${z.code}/${i}/zeigen` }, name)));
     return h('li', { class: 'terg-zeile' },
       h('div', { class: 'terg-daten' },
+        sammel ? h('b', { class: 'terg-titel' }, sitzung.titel || T('terg.titel')) : null,
         h('span', { class: 'terg-datum' }, sitzung.erstellt ? datum(s, sitzung.erstellt) : '–'),
         h('b', { class: 'terg-code' }, z.codeText),
         h('span', null, T('terg.gruppen', { n: z.gruppen })),
@@ -80,8 +85,14 @@ export function zeige(wurzel, ctx, vorlageId) {
   async function lade() {
     if (zu) return;
     try {
-      const liste = await store.tafel.meine(vorlageId);
+      const liste = sammel ? await sitzungenOhneVorlage() : await store.tafel.meine(vorlageId);
       if (zu) return;
+      if (sammel) {
+        titelEl.textContent = T('terg.ohneTitel');
+        if (!liste.length) { hinweis(T('terg.ohneLeer'), true); return; }
+        inhalt.replaceChildren(h('p', { class: 'hilfe' }, T('terg.ohneHilfe')), h('ul', { class: 'terg-liste' }, liste.map(zeile)));
+        return;
+      }
       titelEl.textContent = ergebnisTitel(vorlage, liste, T('terg.titel'));
       if (!liste.length) { hinweis(T(vorlage ? 'terg.leer' : 'terg.weg'), !vorlage); return; }
       inhalt.replaceChildren(...[vorlage ? null : h('p', { class: 'hilfe' }, T('terg.ohneVorlage')),
@@ -89,7 +100,14 @@ export function zeige(wurzel, ctx, vorlageId) {
     } catch (e) { if (!zu) inhalt.replaceChildren(h('p', { class: 'fehler' }, fehlerText(s, e))); }
   }
 
+  /** Wie im Studio: eigene Vorlagen und vollständige des Kollegiums sind sichtbar, alles andere fehlt. */
+  async function sitzungenOhneVorlage() {
+    const [sitzungen, meine, kollegium] = await Promise.all([store.tafel.meine(), store.quiz.meine(), store.quiz.kollegium()]);
+    return ohneVorlage(sitzungen, [...meine, ...kollegium.filter(q => !quizFehler(q).length)]);
+  }
+
   async function starte() {
+    if (sammel) { await lade(); return; }
     try { vorlage = await store.quiz.laden(vorlageId); } catch { vorlage = null; }
     if (zu) return;
     await lade();

@@ -26,3 +26,15 @@ export const zeilenStand = s => ({
 export function ergebnisTitel(vorlage, sitzungen, ersatz) {
   return (vorlage && vorlage.titel) || (Array.isArray(sitzungen) ? sitzungen.find(x => x && x.titel)?.titel : '') || ersatz;
 }
+
+/** Adresse der Sammelliste unter #/studio/tafeln/…: alle eigenen Sitzungen, deren Vorlage im Studio fehlt. */
+export const OHNE_VORLAGE = 'ohne-vorlage';
+
+/**
+ * Sitzungen, deren Vorlage nicht unter den sichtbaren Vorlagen ist (gelöscht oder im Kollegium nicht mehr
+ * freigegeben). Ohne diese Liste wären sie samt Bildern nur noch über ihre Adresse erreichbar.
+ */
+export function ohneVorlage(sitzungen, vorlagen) {
+  const ids = new Set((Array.isArray(vorlagen) ? vorlagen : []).filter(Boolean).map(v => v.id));
+  return (Array.isArray(sitzungen) ? sitzungen : []).filter(x => x && !ids.has(x.vorlageId));
+}

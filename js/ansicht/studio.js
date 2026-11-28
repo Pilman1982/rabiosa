@@ -9,6 +9,7 @@ import { inhaltVon, suche, pfadVon, bekannteOrdner, artVon, nachArt, artZahlen, 
 import { istPraesentation, neuePraesentation, beispielPraesentation, neueSitzung } from '../logik/praesentation.js';
 import { istWhiteboard, neueTafelVorlage, beispielTafel, sitzungAusVorlage, GRUPPEN_MIN, GRUPPEN_MAX, GRUPPEN_VORGABE } from '../logik/tafel.js';
 import { VARIANTE, zeigeWhiteboard } from '../variante.js';
+import { ohneVorlage, OHNE_VORLAGE } from '../logik/tafelergebnisse.js';
 
 /** Kopiert ein Quiz samt Bildern ins eigene Konto. */
 export async function kopiereQuiz(store, quiz, titel) {
@@ -30,6 +31,7 @@ export function zeige(wurzel, ctx) {
   let konto;                      // undefined = lädt
   let reiter = 'meine';
   let meine = null, kollegium = null;
+  let waisen = 0;                 // eigene Whiteboard-Sitzungen, deren Vorlage fehlt (gelöscht, nicht mehr freigegeben)
   let leere = [];                 // eigene leere Ordner { fach, ordner }
   let leereGeladen = false;       // nur dann darf die Liste überschrieben werden, sonst gingen gespeicherte verloren
   // Pro Reiter: geöffneter Ordner (Fach zuerst) und Suchtext. Die gewählte Art gilt für beide Reiter.
@@ -46,16 +48,18 @@ export function zeige(wurzel, ctx) {
   async function lade() {
     try {
       // Die Liste der leeren Ordner ist Zugabe: Fehlt sie (z. B. Regeln noch nicht veröffentlicht), geht das Studio trotzdem.
-      const [m, k, [l, geladen]] = await Promise.all([store.quiz.meine(), store.quiz.kollegium(),
-        store.ordner.laden().then(liste => [liste, true], () => [[], false])]);
+      // Auch die eigenen Whiteboard-Sitzungen sind Zugabe: Fehlen sie, fehlt nur der Hinweis auf die ohne Vorlage.
+      const [m, k, [l, geladen], sitzungen] = await Promise.all([store.quiz.meine(), store.quiz.kollegium(),
+        store.ordner.laden().then(liste => [liste, true], () => [[], false]),
+        zeigeWhiteboard(VARIANTE) && store.tafel ? store.tafel.meine().catch(() => []) : []]);
       leereGeladen = geladen;
       meine = m;
       kollegium = k.filter(q => !quizFehler(q).length);   // Unvollständiges erscheint im Kollegium nicht
+      waisen = ohneVorlage(sitzungen, [...m, ...kollegium]).length;
       leere = leereAufraeumen(l, m, T('studio.ohneFach'));
       if (geladen && leere.length < l.length) store.ordner.speichern(leere).catch(() => {});
       // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen; dazu die eigenen leeren.
       try { sessionStorage.setItem('rabiosa-ordner', JSON.stringify(bekannteOrdner([...m, ...kollegium, ...leere]))); } catch { /* ohne Speicher */ }
-      // Vorschläge fürs Ordnerfeld im Editor, damit alle dieselben Ordner benutzen.
     } catch (e) { meldung(fehlerText(s(), e)); meine ??= []; kollegium ??= []; }
     zeichne();
   }
@@ -418,6 +422,7 @@ export function zeige(wurzel, ctx) {
       if (!meine) return h('p', { class: 'leer' }, T('allg.laedt'));
       return [
         h('div', { class: 'aktionen' }, neuMenue(), h('button', { class: 'knopf leise', onclick: importiere }, T('studio.import'))),
+        waisen ? h('p', { class: 'laufend' }, h('a', { class: 'knopf klein leise', href: '#/studio/tafeln/' + OHNE_VORLAGE }, T('studio.ohneVorlage', { n: waisen }))) : null,
         meine.length || leere.length
           ? [artenLeiste(meine), ablage({
             quizze: meine, leer: leere, stand: lage.meine, karte: meineKarte, extras: verwaltung, ablegen,
